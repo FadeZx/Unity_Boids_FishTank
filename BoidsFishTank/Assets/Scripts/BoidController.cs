@@ -1,4 +1,10 @@
+﻿#if ENABLE_INPUT_SYSTEM
+using UnityEngine.InputSystem;  // new Input System
+#endif
+
+using System;
 using System.Collections.Generic;
+using System.IO;
 using UnityEngine;
 
 [DefaultExecutionOrder(-50)]
@@ -7,6 +13,8 @@ public class BoidController : MonoBehaviour
     [Header("References")]
     public BoxCollider simulationArea;     // IsTrigger = true
     public BoidAgent boidPrefab;
+
+    [Header("Counts")]
     public int boidCount = 100;
 
     [Header("Speeds")]
@@ -35,6 +43,25 @@ public class BoidController : MonoBehaviour
 
     [HideInInspector] public List<BoidAgent> agents = new List<BoidAgent>();
 
+    // --- UI / persistence ---
+    [Serializable]
+    public class BoidSettings
+    {
+        public int boidCount;
+        public float minSpeed, maxSpeed, maxSteerForce;
+        public float neighborRadius, separationRadius;
+        public float weightSeparation, weightAlignment, weightCohesion, weightBounds, weightObstacleAvoid;
+        public float avoidDistance, avoidProbeAngle;
+        public bool drawDebug;
+    }
+
+    const string kPrefsKey = "Boids_Settings_JSON";
+    string JsonPath => Path.Combine(Application.persistentDataPath, "boids_settings.json");
+
+    bool showUI = true;        // F1 toggle
+    Vector2 scroll;            // UI scroll
+    int lastSpawnCount;        // detect boidCount change for respawn
+
     void Start()
     {
         if (!simulationArea)
@@ -44,29 +71,71 @@ public class BoidController : MonoBehaviour
             return;
         }
 
-        Spawn();
+        // Try auto-load from file (if exists), then PlayerPrefs
+        TryLoadFromFile();
+        if (agents.Count == 0) Spawn();
     }
 
+    void Update()
+    {
+        // Toggle UI
+        if (KeyDown_F1()) showUI = !showUI;
+
+        // Hotkeys
+        if (CtrlS_Down()) SaveToFile();
+        if (CtrlL_Down()) LoadFromFile();
+        if (KeyDown_R()) Respawn();
+
+        // Respawn when count changed
+        if (boidCount != lastSpawnCount) Respawn();
+    }
+
+
+    // ----------------- Spawning -----------------
     void Spawn()
     {
-        agents.Clear();
-        var area = simulationArea.bounds;
+        ClearAgents();
 
+        if (!boidPrefab)
+        {
+            Debug.LogWarning("BoidController: Missing boidPrefab.");
+            return;
+        }
+
+        var area = simulationArea.bounds;
         for (int i = 0; i < boidCount; i++)
         {
             Vector3 p = new Vector3(
-                Random.Range(area.min.x, area.max.x),
-                Random.Range(area.min.y, area.max.y),
-                Random.Range(area.min.z, area.max.z)
+                UnityEngine.Random.Range(area.min.x, area.max.x),
+                UnityEngine.Random.Range(area.min.y, area.max.y),
+                UnityEngine.Random.Range(area.min.z, area.max.z)
             );
 
             var a = Instantiate(boidPrefab, p, Quaternion.identity, transform);
             a.controller = this;
-            a.Velocity = Random.insideUnitSphere.normalized * Random.Range(minSpeed, maxSpeed);
+            a.Velocity = UnityEngine.Random.insideUnitSphere.normalized * UnityEngine.Random.Range(minSpeed, maxSpeed);
             agents.Add(a);
         }
+        lastSpawnCount = boidCount;
     }
 
+    void Respawn()
+    {
+        Spawn();
+    }
+
+    void ClearAgents()
+    {
+        // delete children
+        for (int i = transform.childCount - 1; i >= 0; i--)
+        {
+            var child = transform.GetChild(i);
+            Destroy(child.gameObject);
+        }
+        agents.Clear();
+    }
+
+    // ----------------- Steering -----------------
     public Vector3 ComputeSteering(BoidAgent self, float dt, out (Vector3 sep, Vector3 ali, Vector3 coh, Vector3 bounds, Vector3 avoid) forces)
     {
         Vector3 pos = self.Position;
@@ -106,7 +175,6 @@ public class BoidController : MonoBehaviour
         Vector3 boundsForce = BoundsSteer(pos, vel);
         Vector3 avoid = ObstacleAvoid(pos, vel);
 
-        // Weighted blend
         Vector3 steer =
             weightSeparation * sep +
             weightAlignment * ali +
@@ -114,11 +182,9 @@ public class BoidController : MonoBehaviour
             weightBounds * boundsForce +
             weightObstacleAvoid * avoid;
 
-        // Clamp
         if (steer.sqrMagnitude > maxSteerForce * maxSteerForce)
             steer = steer.normalized * maxSteerForce;
 
-        // return all unweighted vectors for debug
         forces = (sep, ali, coh, boundsForce, avoid);
         return steer;
     }
@@ -127,7 +193,6 @@ public class BoidController : MonoBehaviour
     {
         var b = simulationArea.bounds;
         Vector3 steer = Vector3.zero;
-        // Soft zone toward center when near borders
         float pad = 0.5f; // padding from walls
         Vector3 target = pos;
 
@@ -157,15 +222,13 @@ public class BoidController : MonoBehaviour
         // Forward ray
         if (Physics.Raycast(pos, fwd, out RaycastHit hit, avoidDistance, obstacleMask, QueryTriggerInteraction.Ignore))
         {
-            // steer away from obstacle normal
             Vector3 away = Vector3.Reflect(fwd, hit.normal);
             steer += away;
         }
 
-        // Side feelers (spread)
+        // Side feelers
         Quaternion leftQ = Quaternion.AngleAxis(-avoidProbeAngle, Vector3.up);
         Quaternion rightQ = Quaternion.AngleAxis(avoidProbeAngle, Vector3.up);
-
         Vector3 left = leftQ * fwd;
         Vector3 right = rightQ * fwd;
 
@@ -178,8 +241,272 @@ public class BoidController : MonoBehaviour
         return steer;
     }
 
+    // ----------------- Runtime UI -----------------
+    void OnGUI()
+    {
+        if (!showUI) return;
+
+        const int w = 320;
+        Rect r = new Rect(12, 12, w, Screen.height - 24);
+        GUILayout.BeginArea(r, GUI.skin.box);
+        GUILayout.Label("<b>Boids Runtime Settings</b>", new GUIStyle(GUI.skin.label) { richText = true });
+
+        scroll = GUILayout.BeginScrollView(scroll);
+
+        // Counts
+        boidCount = IntSlider("Boid Count", boidCount, 1, 2000);
+
+        // Speeds
+        minSpeed = Slider("Min Speed", minSpeed, 0.1f, maxSpeed);
+        maxSpeed = Slider("Max Speed", maxSpeed, minSpeed, 15f);
+        maxSteerForce = Slider("Max Steer", maxSteerForce, 0.1f, 20f);
+
+        GUILayout.Space(6);
+
+        // Neighborhood
+        neighborRadius = Slider("Neighbor Radius", neighborRadius, 0.1f, 10f);
+        separationRadius = Slider("Separation Radius", separationRadius, 0.05f, neighborRadius);
+
+        GUILayout.Space(6);
+
+        // Weights
+        weightSeparation = Slider("W Separation", weightSeparation, 0f, 10f);
+        weightAlignment = Slider("W Alignment", weightAlignment, 0f, 10f);
+        weightCohesion = Slider("W Cohesion", weightCohesion, 0f, 10f);
+        weightBounds = Slider("W Bounds", weightBounds, 0f, 10f);
+        weightObstacleAvoid = Slider("W Obstacle", weightObstacleAvoid, 0f, 10f);
+
+        GUILayout.Space(6);
+
+        // Avoidance
+        avoidDistance = Slider("Avoid Distance", avoidDistance, 0.1f, 10f);
+        avoidProbeAngle = Slider("Avoid Angle", avoidProbeAngle, 0f, 85f);
+
+        // Debug
+        drawDebug = Toggle("Draw Debug", drawDebug);
+
+        GUILayout.Space(10);
+        GUILayout.Label($"Save Path:\n<size=10>{Application.persistentDataPath}</size>", new GUIStyle(GUI.skin.label) { richText = true, wordWrap = true });
+
+        GUILayout.Space(6);
+        GUILayout.BeginHorizontal();
+        if (GUILayout.Button("Save → File")) SaveToFile();
+        if (GUILayout.Button("Load ← File")) LoadFromFile();
+        GUILayout.EndHorizontal();
+
+        GUILayout.BeginHorizontal();
+        if (GUILayout.Button("Save → PlayerPrefs")) SaveToPrefs();
+        if (GUILayout.Button("Load ← PlayerPrefs")) LoadFromPrefs();
+        GUILayout.EndHorizontal();
+
+        if (GUILayout.Button("Respawn Now")) Respawn();
+
+        GUILayout.EndScrollView();
+        GUILayout.Label("Hotkeys: F1 toggle • Ctrl+S save • Ctrl+L load • R respawn", new GUIStyle(GUI.skin.label) { fontSize = 10, wordWrap = true });
+        GUILayout.EndArea();
+    }
+
+    // Simple IMGUI helpers
+    float Slider(string label, float v, float min, float max)
+    {
+        GUILayout.BeginHorizontal();
+        GUILayout.Label(label, GUILayout.Width(130));
+        v = GUILayout.HorizontalSlider(v, min, max);
+        GUILayout.Label(v.ToString("0.00"), GUILayout.Width(48));
+        GUILayout.EndHorizontal();
+        return v;
+    }
+    int IntSlider(string label, int v, int min, int max)
+    {
+        GUILayout.BeginHorizontal();
+        GUILayout.Label(label, GUILayout.Width(130));
+        v = (int)GUILayout.HorizontalSlider(v, min, max);
+        GUILayout.Label(v.ToString(), GUILayout.Width(48));
+        GUILayout.EndHorizontal();
+        return Mathf.Clamp(v, min, max);
+    }
+    bool Toggle(string label, bool t)
+    {
+        GUILayout.BeginHorizontal();
+        t = GUILayout.Toggle(t, "", GUILayout.Width(18));
+        GUILayout.Label(label);
+        GUILayout.EndHorizontal();
+        return t;
+    }
+
+    // ----------------- Persistence -----------------
+    BoidSettings Collect()
+    {
+        return new BoidSettings
+        {
+            boidCount = boidCount,
+            minSpeed = minSpeed,
+            maxSpeed = maxSpeed,
+            maxSteerForce = maxSteerForce,
+            neighborRadius = neighborRadius,
+            separationRadius = separationRadius,
+            weightSeparation = weightSeparation,
+            weightAlignment = weightAlignment,
+            weightCohesion = weightCohesion,
+            weightBounds = weightBounds,
+            weightObstacleAvoid = weightObstacleAvoid,
+            avoidDistance = avoidDistance,
+            avoidProbeAngle = avoidProbeAngle,
+            drawDebug = drawDebug
+        };
+    }
+
+    void Apply(BoidSettings s, bool respawnIfNeeded = true)
+    {
+        if (s == null) return;
+        bool needRespawn = s.boidCount != boidCount;
+
+        boidCount = s.boidCount;
+        minSpeed = s.minSpeed; maxSpeed = s.maxSpeed; maxSteerForce = s.maxSteerForce;
+        neighborRadius = s.neighborRadius; separationRadius = s.separationRadius;
+        weightSeparation = s.weightSeparation; weightAlignment = s.weightAlignment; weightCohesion = s.weightCohesion; weightBounds = s.weightBounds; weightObstacleAvoid = s.weightObstacleAvoid;
+        avoidDistance = s.avoidDistance; avoidProbeAngle = s.avoidProbeAngle;
+        drawDebug = s.drawDebug;
+
+        if (respawnIfNeeded && needRespawn) Respawn();
+    }
+
+    void SaveToFile()
+    {
+        try
+        {
+            var json = JsonUtility.ToJson(Collect(), true);
+            File.WriteAllText(JsonPath, json);
+#if UNITY_EDITOR
+            Debug.Log($"[Boids] Saved settings to file:\n{JsonPath}\n{json}");
+#endif
+        }
+        catch (Exception e)
+        {
+            Debug.LogError($"[Boids] SaveToFile error: {e.Message}");
+        }
+    }
+
+    void LoadFromFile()
+    {
+        try
+        {
+            if (!File.Exists(JsonPath))
+            {
+                Debug.LogWarning($"[Boids] No settings file at: {JsonPath}");
+                return;
+            }
+            var json = File.ReadAllText(JsonPath);
+            var s = JsonUtility.FromJson<BoidSettings>(json);
+            Apply(s, true);
+#if UNITY_EDITOR
+            Debug.Log($"[Boids] Loaded settings from file:\n{JsonPath}\n{json}");
+#endif
+        }
+        catch (Exception e)
+        {
+            Debug.LogError($"[Boids] LoadFromFile error: {e.Message}");
+        }
+    }
+
+    void SaveToPrefs()
+    {
+        var json = JsonUtility.ToJson(Collect(), false);
+        PlayerPrefs.SetString(kPrefsKey, json);
+        PlayerPrefs.Save();
+#if UNITY_EDITOR
+        Debug.Log($"[Boids] Saved settings to PlayerPrefs: {json}");
+#endif
+    }
+
+    void LoadFromPrefs()
+    {
+        if (!PlayerPrefs.HasKey(kPrefsKey))
+        {
+            Debug.LogWarning("[Boids] No PlayerPrefs settings found.");
+            return;
+        }
+        var json = PlayerPrefs.GetString(kPrefsKey);
+        var s = JsonUtility.FromJson<BoidSettings>(json);
+        Apply(s, true);
+#if UNITY_EDITOR
+        Debug.Log($"[Boids] Loaded settings from PlayerPrefs: {json}");
+#endif
+    }
+
+    bool TryLoadFromFile()
+    {
+        if (File.Exists(JsonPath))
+        {
+            LoadFromFile();
+            return true;
+        }
+        if (PlayerPrefs.HasKey(kPrefsKey))
+        {
+            LoadFromPrefs();
+            return true;
+        }
+        return false;
+    }
+
+    // ------------- Gizmo (optional) -------------
     void OnDrawGizmosSelected()
     {
-      
+        if (simulationArea)
+        {
+            Gizmos.color = new Color(0, 0.8f, 1f, 0.15f);
+            Gizmos.DrawCube(simulationArea.bounds.center, simulationArea.bounds.size);
+        }
+    }
+
+
+    // --- Input helpers (works with both systems) ---
+    bool KeyDown_F1()
+    {
+#if ENABLE_INPUT_SYSTEM
+        return Keyboard.current != null && Keyboard.current.f1Key.wasPressedThisFrame;
+#else
+    return Input.GetKeyDown(KeyCode.F1);
+#endif
+    }
+
+    bool KeyDown_R()
+    {
+#if ENABLE_INPUT_SYSTEM
+        return Keyboard.current != null && Keyboard.current.rKey.wasPressedThisFrame;
+#else
+    return Input.GetKeyDown(KeyCode.R);
+#endif
+    }
+
+    bool CtrlHeld()
+    {
+#if ENABLE_INPUT_SYSTEM
+        var k = Keyboard.current;
+        if (k == null) return false;
+        return k.leftCtrlKey.isPressed || k.rightCtrlKey.isPressed;
+#else
+    return Input.GetKey(KeyCode.LeftControl) || Input.GetKey(KeyCode.RightControl);
+#endif
+    }
+
+    bool CtrlS_Down()
+    {
+#if ENABLE_INPUT_SYSTEM
+        var k = Keyboard.current;
+        return k != null && CtrlHeld() && k.sKey.wasPressedThisFrame;
+#else
+    return CtrlHeld() && Input.GetKeyDown(KeyCode.S);
+#endif
+    }
+
+    bool CtrlL_Down()
+    {
+#if ENABLE_INPUT_SYSTEM
+        var k = Keyboard.current;
+        return k != null && CtrlHeld() && k.lKey.wasPressedThisFrame;
+#else
+    return CtrlHeld() && Input.GetKeyDown(KeyCode.L);
+#endif
     }
 }
