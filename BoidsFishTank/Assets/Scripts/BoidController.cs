@@ -38,6 +38,11 @@ public class BoidController : MonoBehaviour
     public float avoidDistance = 1.5f;   // ray length
     public float avoidProbeAngle = 25f;  // degrees (side feelers)
 
+    [Header("Predator Avoidance")]
+    public OrcaController predatorController;  // assign your OrcaController to make prey flee orcas
+    public float predatorAvoidRadius = 2.5f;   // how far prey start reacting to orcas
+    public float weightPredatorAvoid = 2.0f;   // strength of predator avoidance
+
     [Header("Debug")]
     public bool drawDebug = false;
 
@@ -52,6 +57,7 @@ public class BoidController : MonoBehaviour
         public float neighborRadius, separationRadius;
         public float weightSeparation, weightAlignment, weightCohesion, weightBounds, weightObstacleAvoid;
         public float avoidDistance, avoidProbeAngle;
+        public float predatorAvoidRadius, weightPredatorAvoid;
         public bool drawDebug;
     }
 
@@ -135,6 +141,14 @@ public class BoidController : MonoBehaviour
         agents.Clear();
     }
 
+    // Remove a single prey agent (called by predators upon contact)
+    public void RemoveAgent(BoidAgent agent)
+    {
+        if (agent == null) return;
+        agents.Remove(agent);
+        Destroy(agent.gameObject);
+    }
+
     // ----------------- Steering -----------------
     public Vector3 ComputeSteering(BoidAgent self, float dt, out (Vector3 sep, Vector3 ali, Vector3 coh, Vector3 bounds, Vector3 avoid) forces)
     {
@@ -175,12 +189,29 @@ public class BoidController : MonoBehaviour
         Vector3 boundsForce = BoundsSteer(pos, vel);
         Vector3 avoid = ObstacleAvoid(pos, vel);
 
+        // Predator avoidance (flee orcas)
+        Vector3 predatorAvoid = Vector3.zero;
+        if (predatorController != null && predatorController.pod != null && predatorController.pod.Count > 0)
+        {
+            float r2 = predatorAvoidRadius * predatorAvoidRadius;
+            foreach (var o in predatorController.pod)
+            {
+                Vector3 to = o.transform.position - pos;
+                float d2 = to.sqrMagnitude;
+                if (d2 < r2 && d2 > 0.0001f)
+                    predatorAvoid -= to.normalized / Mathf.Sqrt(d2);
+            }
+            if (predatorAvoid.sqrMagnitude > 0.0001f)
+                predatorAvoid = predatorAvoid.normalized * maxSpeed - vel;
+        }
+
         Vector3 steer =
             weightSeparation * sep +
             weightAlignment * ali +
             weightCohesion * coh +
             weightBounds * boundsForce +
-            weightObstacleAvoid * avoid;
+            weightObstacleAvoid * avoid +
+            weightPredatorAvoid * predatorAvoid;
 
         if (steer.sqrMagnitude > maxSteerForce * maxSteerForce)
             steer = steer.normalized * maxSteerForce;
@@ -254,36 +285,43 @@ public class BoidController : MonoBehaviour
         scroll = GUILayout.BeginScrollView(scroll);
 
         // Counts
-        boidCount = IntSlider("Boid Count", boidCount, 1, 2000);
+        boidCount = IntSliderT("Boid Count", "Number of prey agents simulated.", boidCount, 1, 2000);
 
         // Speeds
-        minSpeed = Slider("Min Speed", minSpeed, 0.1f, maxSpeed);
-        maxSpeed = Slider("Max Speed", maxSpeed, minSpeed, 15f);
-        maxSteerForce = Slider("Max Steer", maxSteerForce, 0.1f, 20f);
+        minSpeed = SliderT("Min Speed", "Minimum cruising speed (prevents stalling).", minSpeed, 0.1f, maxSpeed);
+        maxSpeed = SliderT("Max Speed", "Top speed for desired velocities.", maxSpeed, minSpeed, 15f);
+        maxSteerForce = SliderT("Max Steer", "Upper limit on steering force to avoid jitter.", maxSteerForce, 0.1f, 20f);
 
         GUILayout.Space(6);
 
         // Neighborhood
-        neighborRadius = Slider("Neighbor Radius", neighborRadius, 0.1f, 10f);
-        separationRadius = Slider("Separation Radius", separationRadius, 0.05f, neighborRadius);
+        neighborRadius = SliderT("Neighbor Radius", "How far neighbors influence alignment/cohesion.", neighborRadius, 0.1f, 10f);
+        separationRadius = SliderT("Separation Radius", "Distance where strong separation pushes away.", separationRadius, 0.05f, neighborRadius);
 
         GUILayout.Space(6);
 
         // Weights
-        weightSeparation = Slider("W Separation", weightSeparation, 0f, 10f);
-        weightAlignment = Slider("W Alignment", weightAlignment, 0f, 10f);
-        weightCohesion = Slider("W Cohesion", weightCohesion, 0f, 10f);
-        weightBounds = Slider("W Bounds", weightBounds, 0f, 10f);
-        weightObstacleAvoid = Slider("W Obstacle", weightObstacleAvoid, 0f, 10f);
+        weightSeparation = SliderT("W Separation", "Weight of separation (spread apart).", weightSeparation, 0f, 10f);
+        weightAlignment = SliderT("W Alignment", "Weight of alignment (match headings).", weightAlignment, 0f, 10f);
+        weightCohesion = SliderT("W Cohesion", "Weight of cohesion (stay together).", weightCohesion, 0f, 10f);
+        weightBounds = SliderT("W Bounds", "Weight of staying inside the tank volume.", weightBounds, 0f, 10f);
+        weightObstacleAvoid = SliderT("W Obstacle", "Weight of steering away from obstacles.", weightObstacleAvoid, 0f, 10f);
 
         GUILayout.Space(6);
 
         // Avoidance
-        avoidDistance = Slider("Avoid Distance", avoidDistance, 0.1f, 10f);
-        avoidProbeAngle = Slider("Avoid Angle", avoidProbeAngle, 0f, 85f);
+        avoidDistance = SliderT("Avoid Distance", "Forward probe length for obstacle detection.", avoidDistance, 0.1f, 10f);
+        avoidProbeAngle = SliderT("Avoid Angle", "Side feeler spread angle for obstacle sensing.", avoidProbeAngle, 0f, 85f);
+
+        GUILayout.Space(6);
+
+        // Predator
+        GUILayout.Label("<b>Predator</b>", new GUIStyle(GUI.skin.label) { richText = true });
+        predatorAvoidRadius = SliderT("Predator Radius", "Distance within which prey react to orcas.", predatorAvoidRadius, 0.5f, 10f);
+        weightPredatorAvoid = SliderT("W Predator", "Strength of fleeing response from orcas.", weightPredatorAvoid, 0f, 10f);
 
         // Debug
-        drawDebug = Toggle("Draw Debug", drawDebug);
+        drawDebug = ToggleT("Draw Debug", "Render debug gizmos/lines.", drawDebug);
 
         GUILayout.Space(10);
         GUILayout.Label($"Save Path:\n<size=10>{Application.persistentDataPath}</size>", new GUIStyle(GUI.skin.label) { richText = true, wordWrap = true });
@@ -302,6 +340,16 @@ public class BoidController : MonoBehaviour
         if (GUILayout.Button("Respawn Now")) Respawn();
 
         GUILayout.EndScrollView();
+
+        // Hover tooltip (shows current control description)
+        if (!string.IsNullOrEmpty(GUI.tooltip))
+        {
+            var tipStyle = new GUIStyle(GUI.skin.box) { wordWrap = true, fontSize = 11 };
+            GUILayout.BeginVertical(GUI.skin.box);
+            GUILayout.Label(GUI.tooltip, tipStyle, GUILayout.ExpandWidth(true));
+            GUILayout.EndVertical();
+        }
+
         GUILayout.Label("Hotkeys: F1 toggle • Ctrl+S save • Ctrl+L load • R respawn", new GUIStyle(GUI.skin.label) { fontSize = 10, wordWrap = true });
         GUILayout.EndArea();
     }
@@ -334,6 +382,34 @@ public class BoidController : MonoBehaviour
         return t;
     }
 
+    // Tooltip-aware helpers
+    float SliderT(string label, string tooltip, float v, float min, float max)
+    {
+        GUILayout.BeginHorizontal();
+        GUILayout.Label(new GUIContent(label, tooltip), GUILayout.Width(130));
+        v = GUILayout.HorizontalSlider(v, min, max);
+        GUILayout.Label(v.ToString("0.00"), GUILayout.Width(48));
+        GUILayout.EndHorizontal();
+        return v;
+    }
+    int IntSliderT(string label, string tooltip, int v, int min, int max)
+    {
+        GUILayout.BeginHorizontal();
+        GUILayout.Label(new GUIContent(label, tooltip), GUILayout.Width(130));
+        v = (int)GUILayout.HorizontalSlider(v, min, max);
+        GUILayout.Label(v.ToString(), GUILayout.Width(48));
+        GUILayout.EndHorizontal();
+        return Mathf.Clamp(v, min, max);
+    }
+    bool ToggleT(string label, string tooltip, bool t)
+    {
+        GUILayout.BeginHorizontal();
+        t = GUILayout.Toggle(t, new GUIContent("", tooltip), GUILayout.Width(18));
+        GUILayout.Label(new GUIContent(label, tooltip));
+        GUILayout.EndHorizontal();
+        return t;
+    }
+
     // ----------------- Persistence -----------------
     BoidSettings Collect()
     {
@@ -352,6 +428,8 @@ public class BoidController : MonoBehaviour
             weightObstacleAvoid = weightObstacleAvoid,
             avoidDistance = avoidDistance,
             avoidProbeAngle = avoidProbeAngle,
+            predatorAvoidRadius = predatorAvoidRadius,
+            weightPredatorAvoid = weightPredatorAvoid,
             drawDebug = drawDebug
         };
     }
@@ -366,6 +444,7 @@ public class BoidController : MonoBehaviour
         neighborRadius = s.neighborRadius; separationRadius = s.separationRadius;
         weightSeparation = s.weightSeparation; weightAlignment = s.weightAlignment; weightCohesion = s.weightCohesion; weightBounds = s.weightBounds; weightObstacleAvoid = s.weightObstacleAvoid;
         avoidDistance = s.avoidDistance; avoidProbeAngle = s.avoidProbeAngle;
+        predatorAvoidRadius = s.predatorAvoidRadius; weightPredatorAvoid = s.weightPredatorAvoid;
         drawDebug = s.drawDebug;
 
         if (respawnIfNeeded && needRespawn) Respawn();

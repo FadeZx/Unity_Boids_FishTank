@@ -1,4 +1,5 @@
 ﻿using UnityEngine;
+using TMPro;
 
 public enum OrcaRole { Leader, Flanker, Striker, Support }
 
@@ -15,7 +16,13 @@ public class OrcaAgent : MonoBehaviour
     public float turnResponsiveness = 6f;
     public float bankingAmount = 0.5f;
 
+    [Header("Labels")]
+    [Tooltip("Assign the TextMeshPro TMP_Text component for the role label.")]
+    public TMP_Text roleLabel;
+
     float strikeCooldownTimer = 0f;
+
+    void Awake() {}
 
     void Update()
     {
@@ -70,9 +77,44 @@ public class OrcaAgent : MonoBehaviour
         transform.position = pos;
         Velocity = vel;
 
+        // Billboard role label to camera and toggle visibility
+        if (roleLabel != null)
+        {
+            Camera cam = controller.labelCamera != null ? controller.labelCamera : Camera.main;
+            roleLabel.gameObject.SetActive(controller.showRoleText);
+            if (cam != null)
+            {
+                Vector3 toCam = cam.transform.position - roleLabel.transform.position;
+                if (toCam.sqrMagnitude > 1e-6f)
+                {
+                    // Face camera (billboard)
+                    roleLabel.transform.rotation = Quaternion.LookRotation(-toCam.normalized, Vector3.up);
+                }
+            }
+            roleLabel.text = role.ToString();
+        }
+
     }
 
-    // ✅ Add these two helpers:
     public bool CanStrike() => strikeCooldownTimer <= 0f;
     public void ResetStrikeCooldown() => strikeCooldownTimer = controller.strikeCooldown;
+
+    // Contact-based kill: requires orca head collider (Trigger) and prey colliders
+    void OnTriggerEnter(Collider other)
+    {
+        TryKill(other);
+    }
+    void OnCollisionEnter(Collision collision)
+    {
+        TryKill(collision.collider);
+    }
+    void TryKill(Collider col)
+    {
+        if (controller == null || controller.preyController == null) return;
+        var prey = col.GetComponentInParent<BoidAgent>();
+        if (prey == null) return;
+        // Remove prey and increment kill count
+        controller.preyController.RemoveAgent(prey);
+        controller.killCount++;
+    }
 }
