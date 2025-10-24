@@ -9,6 +9,24 @@ public class OrcaAgent : MonoBehaviour
     [HideInInspector] public OrcaController controller;
     [HideInInspector] public OrcaRole role;
 
+    // Per-orca prey targeting (lock-on)
+    public BoidAgent CurrentTarget;                 // prey this orca is focused on
+    public float targetHoldTime = 1.0f;             // minimum time to keep current target before allowing switch
+    float targetHoldTimer = 0f;                     // countdown timer for hysteresis
+    public bool HasTarget => CurrentTarget != null;
+    public void SetTarget(BoidAgent t)
+    {
+        if (t != CurrentTarget)
+            targetHoldTimer = targetHoldTime;       // reset hold when target changes
+        CurrentTarget = t;
+    }
+    public void ClearTarget()
+    {
+        CurrentTarget = null;
+        targetHoldTimer = 0f;
+    }
+    public bool CanSwitchTarget() => targetHoldTimer <= 0f;
+
     public Vector3 Position => transform.position;
     public Vector3 Velocity { get; set; }
 
@@ -20,9 +38,37 @@ public class OrcaAgent : MonoBehaviour
     [Tooltip("Assign the TextMeshPro TMP_Text component for the role label.")]
     public TMP_Text roleLabel;
 
+    [Header("Collision / Kills")]
+    [Tooltip("Enable kill-on-contact using the head trigger collider.")]
+    public bool enableHeadKill = true;
+    [Tooltip("Assign the Orca head trigger collider (set as IsTrigger). Collisions with this collider will kill prey.")]
+    public Collider headTrigger;
+
     float strikeCooldownTimer = 0f;
 
-    void Awake() {}
+    void Awake()
+    {
+        // Attach a forwarder to the head trigger so we can detect exactly head collisions
+        if (headTrigger != null && headTrigger.gameObject.GetComponent<OrcaHeadHitboxForwarder>() == null)
+        {
+            var fwd = headTrigger.gameObject.AddComponent<OrcaHeadHitboxForwarder>();
+            fwd.agent = this;
+        }
+    }
+
+    // Forwards trigger/collision from head collider into OrcaAgent logic
+    private class OrcaHeadHitboxForwarder : MonoBehaviour
+    {
+        public OrcaAgent agent;
+        void OnTriggerEnter(Collider other)
+        {
+            agent?.TryHeadKill(other);
+        }
+        void OnCollisionEnter(Collision collision)
+        {
+            agent?.TryHeadKill(collision.collider);
+        }
+    }
 
     void Update()
     {
@@ -30,6 +76,11 @@ public class OrcaAgent : MonoBehaviour
         float dt = Time.deltaTime;
         if (strikeCooldownTimer > 0f)
             strikeCooldownTimer -= dt;
+        if (targetHoldTimer > 0f)
+            targetHoldTimer -= dt;
+        // Clear target if prey destroyed or missing
+        if (CurrentTarget != null && (CurrentTarget.controller == null || CurrentTarget.gameObject == null))
+            ClearTarget();
 
         var steer = controller.ComputeSteering(this, dt, out var debugForces);
 
@@ -102,12 +153,24 @@ public class OrcaAgent : MonoBehaviour
     // Contact-based kill: requires orca head collider (Trigger) and prey colliders
     void OnTriggerEnter(Collider other)
     {
-        TryKill(other);
+        // Body triggers only kill if head-kill is disabled (fallback)
+        if (!enableHeadKill)
+            TryKill(other);
     }
     void OnCollisionEnter(Collision collision)
     {
-        TryKill(collision.collider);
+        // Body collisions only kill if head-kill is disabled (fallback)
+        if (!enableHeadKill)
+            TryKill(collision.collider);
     }
+
+    // Explicit kill only from head hitbox forwarder when enabled
+    internal void TryHeadKill(Collider col)
+    {
+        if (!enableHeadKill) return;
+        TryKill(col);
+    }
+
     void TryKill(Collider col)
     {
         if (controller == null || controller.preyController == null) return;

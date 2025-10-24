@@ -12,6 +12,7 @@ GameObject:
   - component: {fileID: 5151784945541754327}
   - component: {fileID: 5543400946165574159}
   - component: {fileID: 7098982921687660744}
+  - component: {fileID: 6031905336452317668}
   m_Layer: 0
   m_Name: Head
   m_TagString: Untagged
@@ -67,7 +68,7 @@ MeshRenderer:
   m_RenderingLayerMask: 1
   m_RendererPriority: 0
   m_Materials:
-  - {fileID: 2100000, guid: 31321ba15b8f8eb4c954353edc038b1d, type: 2}
+  - {fileID: 2100000, guid: 533fd58b7dc0a0f468f91ebc638abe2a, type: 2}
   m_StaticBatchInfo:
     firstSubMesh: 0
     subMeshCount: 0
@@ -112,6 +113,33 @@ MeshCollider:
   m_Convex: 1
   m_CookingOptions: 30
   m_Mesh: {fileID: 3613567641014311022, guid: 09474a3cf156c3940a75b01b1655b3ba, type: 3}
+--- !u!54 &6031905336452317668
+Rigidbody:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3132403064972745607}
+  serializedVersion: 5
+  m_Mass: 0.0000001
+  m_LinearDamping: 0
+  m_AngularDamping: 0.05
+  m_CenterOfMass: {x: 0, y: 0, z: 0}
+  m_InertiaTensor: {x: 1, y: 1, z: 1}
+  m_InertiaRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_IncludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_ExcludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_ImplicitCom: 1
+  m_ImplicitTensor: 1
+  m_UseGravity: 0
+  m_IsKinematic: 1
+  m_Interpolate: 0
+  m_Constraints: 0
+  m_CollisionDetection: 0
 --- !u!1 &3942479528196127478
 GameObject:
   m_ObjectHideFlags: 0
@@ -137,8 +165,8 @@ Transform:
   m_GameObject: {fileID: 3942479528196127478}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: -0.7071068, z: 0, w: 0.7071068}
-  m_LocalPosition: {x: 0, y: 0, z: 0}
-  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_LocalPosition: {x: 0.000000059605, y: 0, z: -0.28709}
+  m_LocalScale: {x: 1.9899, y: 1.9899, z: 1.9899}
   m_ConstrainProportionsScale: 0
   m_Children:
   - {fileID: 1590856747145867215}
@@ -176,7 +204,7 @@ RectTransform:
   m_GameObject: {fileID: 4057906160624020649}
   m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
   m_LocalPosition: {x: 0, y: 0, z: 0}
-  m_LocalScale: {x: 0.0008560116, y: 0.0008560116, z: 0.0008560116}
+  m_LocalScale: {x: 0.001732239, y: 0.001732239, z: 0.001732239}
   m_ConstrainProportionsScale: 0
   m_Children:
   - {fileID: 2481682935729918968}
@@ -185,7 +213,7 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0, y: 0}
   m_AnchorMax: {x: 0, y: 0}
-  m_AnchoredPosition: {x: 0, y: 0.811}
+  m_AnchoredPosition: {x: -0.000000059605, y: 1.65}
   m_SizeDelta: {x: 1158, y: 626}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!223 &3633480764470754561
@@ -454,9 +482,13 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::OrcaAgent
   controller: {fileID: 0}
   role: 0
+  CurrentTarget: {fileID: 0}
+  targetHoldTime: 1
   turnResponsiveness: 6
   bankingAmount: 0.5
   roleLabel: {fileID: 8371889996919241654}
+  enableHeadKill: 1
+  headTrigger: {fileID: 7098982921687660744}
 --- !u!1 &5650328120946511121
 GameObject:
   m_ObjectHideFlags: 0
@@ -469,7 +501,7 @@ GameObject:
   - component: {fileID: 4955963142217814516}
   - component: {fileID: 8371889996919241654}
   m_Layer: 5
-  m_Name: Text (TMP)
+  m_Name: Label
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -551,12 +583,12 @@ MonoBehaviour:
   m_faceColor:
     serializedVersion: 2
     rgba: 4294967295
-  m_fontSize: 50.42
+  m_fontSize: 48.2
   m_fontSizeBase: 50.42
   m_fontWeight: 400
-  m_enableAutoSizing: 0
-  m_fontSizeMin: 18
-  m_fontSizeMax: 72
+  m_enableAutoSizing: 1
+  m_fontSizeMin: 48.2
+  m_fontSizeMax: 200
   m_fontStyle: 1
   m_HorizontalAlignment: 2
   m_VerticalAlignment: 512
@@ -566,7 +598,7 @@ MonoBehaviour:
   m_lineSpacing: 0
   m_lineSpacingMax: 0
   m_paragraphSpacing: 0
-  m_charWidthMaxAdj: 0
+  m_charWidthMaxAdj: 46.7
   m_TextWrappingMode: 1
   m_wordWrappingRatios: 0.4
   m_overflowMode: 0
@@ -607,12 +639,12 @@ GameObject:
   - component: {fileID: 2429372746935325344}
   - component: {fileID: 4834065874613129510}
   m_Layer: 5
-  m_Name: Image
+  m_Name: BG
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!224 &9105356161902848946
 RectTransform:
   m_ObjectHideFlags: 0
@@ -737,7 +769,7 @@ MeshRenderer:
   m_RenderingLayerMask: 1
   m_RendererPriority: 0
   m_Materials:
-  - {fileID: 2100000, guid: 31321ba15b8f8eb4c954353edc038b1d, type: 2}
+  - {fileID: 2100000, guid: 7ff72e366e29a194eab70faa35b47fad, type: 2}
   m_StaticBatchInfo:
     firstSubMesh: 0
     subMeshCount: 0

@@ -6,6 +6,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using UnityEngine;
+using Unity.Cinemachine;
 
 [DefaultExecutionOrder(-49)] // after BoidController (-50)
 public class OrcaController : MonoBehaviour
@@ -56,20 +57,43 @@ public class OrcaController : MonoBehaviour
     public float strikeBoost = 1.6f;          // speed multiplier during strike
     public float strikeCooldown = 2.5f;       // seconds
 
-    [Header("Obstacle Avoidance")]
+    [Header("Obstacle & Boundary Avoidance")]
     public LayerMask obstacleMask;
     public float avoidDistance = 2.5f;
     public float avoidProbeAngle = 25f;
     public float orcaRadius = 0.25f;
+    [Tooltip("Distance from walls where orcas start steering away (soft boundary).")]
+    public float boundaryAvoidRadius = 1.2f;
 
-    [Header("Debug")]
-    public bool drawDebug = false;
+
+    [Header("Targeting")]
+    [Tooltip("How often to re-evaluate prey targets per orca (seconds).")]
+    public float retargetInterval = 0.6f;
+    [Tooltip("Max number of orcas allowed to focus the same prey to improve coverage.")]
+    public int maxOrcasPerPrey = 2;
+    [Tooltip("Bias toward closer prey.")]
+    public float wTargetDistance = 1.0f;
+    [Tooltip("Bias toward isolated prey (few neighbors).")]
+    public float wTargetIsolation = 1.0f;
+
+    [Tooltip("Force all roles to share Leader's target.")]
+    public bool shareLeaderTarget = true;
+
+    float retargetTimer = 0f;
 
     [Header("Labels & Stats")]
     [Tooltip("Show role text labels above each orca (Leader/Flanker/Striker/Support).")]
     public bool showRoleText = false;
     [Tooltip("Camera used for role label billboarding. If not set, Camera.main is used.")]
     public Camera labelCamera;
+
+    [Header("Cinemachine")]
+    [Tooltip("Assign your FreeLook camera (v3 uses CinemachineCamera with FreeLook components). Assign your FreeLook CinemachineCamera here.")]
+    public CinemachineCamera freeLook;
+    [Tooltip("Assign your Target Group for overview camera.")]
+    public CinemachineTargetGroup targetGroup;
+    [Tooltip("Assign your overview Virtual Camera that looks at the Target Group.")]
+    public CinemachineCamera overviewCamera;
 
     [Tooltip("Total number of prey killed by orcas this session.")]
     public int killCount = 0;
@@ -92,7 +116,13 @@ public class OrcaController : MonoBehaviour
         }
         TryLoad();
         if (labelCamera == null) labelCamera = Camera.main;
+
+        // Auto-find Cinemachine components if not assigned
+        AutoFindCinemachine();
+
         SpawnPod();
+        // Populate target group with spawned orcas
+        SyncTargetGroup();
     }
 
     void Update()
@@ -102,15 +132,39 @@ public class OrcaController : MonoBehaviour
         // compute prey centroid/avg vel once per frame
         GetPreyStats(out preyCentroid, out preyAvgVel);
 
-        if (drawDebug)
+        // periodic target assignment for each orca
+        AssignTargetsPeriodically(Time.deltaTime);
+
+        // share Leader's target with the whole pod if enabled
+        if (shareLeaderTarget)
         {
-            Debug.DrawLine(preyCentroid, preyCentroid + preyAvgVel.normalized * 2f, Color.cyan);
+            BoidAgent leadersTarget = null;
+            foreach (var o in pod)
+            {
+                if (o.role == OrcaRole.Leader && o.CurrentTarget != null)
+                {
+                    leadersTarget = o.CurrentTarget;
+                    break;
+                }
+            }
+            if (leadersTarget != null)
+            {
+                foreach (var o in pod)
+                {
+                    if (o.CurrentTarget != leadersTarget)
+                        o.SetTarget(leadersTarget);
+                }
+            }
         }
+
+       
     }
 
     // ---------------- Spawning / Roles ----------------
     public void SpawnPod()
     {
+        // Reset kill count when starting over
+        killCount = 0;
         Clear();
         var b = simulationArea.bounds;
 
@@ -126,6 +180,7 @@ public class OrcaController : MonoBehaviour
                 var a = Instantiate(orcaPrefab, p, Quaternion.identity, transform);
                 a.controller = this;
                 a.role = role;
+                a.name = $"{role} {i+1}"; // set object name to role instead of (Clone)
                 a.Velocity = UnityEngine.Random.insideUnitSphere.normalized * UnityEngine.Random.Range(minSpeed, maxSpeed);
                 pod.Add(a);
             }
@@ -135,6 +190,9 @@ public class OrcaController : MonoBehaviour
         SpawnRole(Mathf.Max(0, flankers), OrcaRole.Flanker);
         SpawnRole(Mathf.Max(0, strikers), OrcaRole.Striker);
         SpawnRole(Mathf.Max(0, supports), OrcaRole.Support);
+
+        // Sync TargetGroup members
+        SyncTargetGroup();
     }
 
     public void Clear()
@@ -185,10 +243,11 @@ public class OrcaController : MonoBehaviour
 
         // --- obstacle avoidance ---
         Vector3 avoid = ObstacleAvoid(pos, vel);
+        Vector3 boundaryAvoid = BoundaryAvoid(pos, vel);
 
         // blend
         Vector3 steer = wSeparation * sep + wAlignment * ali + wCohesion * coh
-                      + roleForce + avoid + wDepth * depthForce;
+                      + roleForce + avoid + boundaryAvoid + wDepth * depthForce;
 
         // limit
         if (steer.sqrMagnitude > maxSteerForce * maxSteerForce)
@@ -201,13 +260,44 @@ public class OrcaController : MonoBehaviour
     Vector3 RoleForce(OrcaAgent self, Vector3 pos, Vector3 vel, Vector3 preyCtr, Vector3 preyVel, float dt)
     {
         Vector3 f = Vector3.zero;
-        Vector3 toPrey = preyCtr - pos;
+
+        // Choose individual prey target with hysteresis
+        BoidAgent target = self.CurrentTarget;
+        // Clear invalid
+        if (target != null && (target.controller == null || target.gameObject == null))
+            self.ClearTarget();
+        target = self.CurrentTarget;
+        // Attempt lock-on if no target
+        if (target == null && preyController != null && preyController.agents.Count > 0)
+        {
+            target = FindNearestPrey(pos);
+            self.SetTarget(target);
+        }
+        // Consider switching only when hold timer elapsed and a clearly better candidate exists
+        if (self.CanSwitchTarget() && preyController != null && preyController.agents.Count > 0)
+        {
+            var best = FindNearestPrey(pos);
+            if (best != null && best != target)
+            {
+                float currentDist = (target != null) ? (target.Position - pos).sqrMagnitude : float.PositiveInfinity;
+                float bestDist = (best.Position - pos).sqrMagnitude;
+                // Switch if new is significantly closer (30% closer) or current got too far
+                if (bestDist < currentDist * 0.7f || currentDist > strikeRange * strikeRange * 4f)
+                    self.SetTarget(best);
+            }
+        }
+
+        // Drive behavior by target if locked, else fall back to centroid
+        Vector3 aimCtr = self.HasTarget ? self.CurrentTarget.Position : preyCtr;
+        Vector3 aimVel = self.HasTarget ? self.CurrentTarget.Velocity : preyVel;
+
+        Vector3 toPrey = aimCtr - pos;
         float dist = toPrey.magnitude;
-        Vector3 preyDir = (preyVel.sqrMagnitude > 1e-6f) ? preyVel.normalized : Vector3.forward;
+        Vector3 preyDir = (aimVel.sqrMagnitude > 1e-6f) ? aimVel.normalized : Vector3.forward;
 
         // Intercept point for pursuit
-        float tLead = Mathf.Clamp(dist / Mathf.Max(0.1f, maxSpeed + preyVel.magnitude), 0.1f, 2.0f);
-        Vector3 intercept = preyCtr + preyVel * tLead;
+        float tLead = Mathf.Clamp(dist / Mathf.Max(0.1f, maxSpeed + aimVel.magnitude), 0.1f, 2.0f);
+        Vector3 intercept = aimCtr + aimVel * tLead;
 
         switch (self.role)
         {
@@ -217,15 +307,22 @@ public class OrcaController : MonoBehaviour
                 break;
 
             case OrcaRole.Flanker:
-                // Move to ring around prey, offset left/right relative to prey heading
-                // Assign each flanker a unique angle based on index for spacing
-                int index = IndexAmongRole(self, OrcaRole.Flanker);
-                float sign = (index % 2 == 0) ? 1f : -1f;
-                float angle = flankOffsetAngle * (1 + index / 2); // 45, 90, ...
-                Quaternion q = Quaternion.AngleAxis(sign * angle, Vector3.up);
-                Vector3 tangent = q * preyDir;
-                Vector3 target = preyCtr + tangent.normalized * encircleRadius;
-                f += wEncircle * (target - pos);
+                // With shared target enabled, also converge toward intercept for reliable collision
+                if (shareLeaderTarget)
+                {
+                    f += wEncircle * (intercept - pos);
+                }
+                else
+                {
+                    // Move to ring around prey, offset left/right relative to prey heading
+                    int index = IndexAmongRole(self, OrcaRole.Flanker);
+                    float sign = (index % 2 == 0) ? 1f : -1f;
+                    float angle = flankOffsetAngle * (1 + index / 2); // 45, 90, ...
+                    Quaternion q = Quaternion.AngleAxis(sign * angle, Vector3.up);
+                    Vector3 tangent = q * preyDir;
+                    Vector3 ringTarget = preyCtr + tangent.normalized * encircleRadius;
+                    f += wEncircle * (ringTarget - pos);
+                }
                 break;
 
             case OrcaRole.Striker:
@@ -246,9 +343,17 @@ public class OrcaController : MonoBehaviour
                 break;
 
             case OrcaRole.Support:
-                // Stay slightly behind the prey direction to corral (herding)
-                Vector3 behind = preyCtr - preyDir * (encircleRadius * 1.1f);
-                f += wCorral * (behind - pos);
+                // With shared target, also help converge to ensure contact
+                if (shareLeaderTarget)
+                {
+                    f += wCorral * (intercept - pos);
+                }
+                else
+                {
+                    // Stay slightly behind the prey direction to corral (herding)
+                    Vector3 behind = preyCtr - preyDir * (encircleRadius * 1.1f);
+                    f += wCorral * (behind - pos);
+                }
                 break;
         }
 
@@ -300,6 +405,38 @@ public class OrcaController : MonoBehaviour
         return Vector3.zero;
     }
 
+    // Soft avoidance from tank boundaries before hard box reflection
+    Vector3 BoundaryAvoid(Vector3 pos, Vector3 vel)
+    {
+        var b = simulationArea.bounds;
+        Vector3 steer = Vector3.zero;
+        float pad = boundaryAvoidRadius;
+
+        // X walls
+        if (pos.x - b.min.x < pad)
+            steer += Vector3.right * (1f - Mathf.Clamp01((pos.x - b.min.x) / pad));
+        else if (b.max.x - pos.x < pad)
+            steer += Vector3.left * (1f - Mathf.Clamp01((b.max.x - pos.x) / pad));
+
+        // Y walls
+        if (pos.y - b.min.y < pad)
+            steer += Vector3.up * (1f - Mathf.Clamp01((pos.y - b.min.y) / pad));
+        else if (b.max.y - pos.y < pad)
+            steer += Vector3.down * (1f - Mathf.Clamp01((b.max.y - pos.y) / pad));
+
+        // Z walls
+        if (pos.z - b.min.z < pad)
+            steer += Vector3.forward * (1f - Mathf.Clamp01((pos.z - b.min.z) / pad));
+        else if (b.max.z - pos.z < pad)
+            steer += Vector3.back * (1f - Mathf.Clamp01((b.max.z - pos.z) / pad));
+
+        if (steer.sqrMagnitude > 1e-8f)
+        {
+            steer = steer.normalized * maxSpeed - vel * 0.2f;
+        }
+        return steer;
+    }
+
     // Hard keep-in-box (same idea you used)
     public void EnforceBounds(ref Vector3 pos, ref Vector3 vel, float bounciness = 0.25f, float skin = 0.01f)
     {
@@ -333,6 +470,95 @@ public class OrcaController : MonoBehaviour
         }
         centroid /= count;
         avgVel /= Mathf.Max(1, count);
+    }
+
+    // ---------------- Targeting ----------------
+    void AssignTargetsPeriodically(float dt)
+    {
+        retargetTimer -= dt;
+        if (retargetTimer > 0f) return;
+        retargetTimer = retargetInterval;
+        if (preyController == null || preyController.agents.Count == 0 || pod.Count == 0) return;
+
+        // Build map: how many orcas currently on each prey
+        var preyToCount = new Dictionary<BoidAgent, int>();
+        foreach (var o in pod)
+        {
+            if (o.CurrentTarget != null)
+            {
+                if (!preyToCount.ContainsKey(o.CurrentTarget)) preyToCount[o.CurrentTarget] = 0;
+                preyToCount[o.CurrentTarget]++;
+            }
+        }
+
+        foreach (var o in pod)
+        {
+            // Skip switch if in hold
+            if (!o.CanSwitchTarget()) continue;
+            var best = FindBestPreyFor(o, preyToCount);
+            if (best != null && best != o.CurrentTarget)
+            {
+                o.SetTarget(best);
+                if (!preyToCount.ContainsKey(best)) preyToCount[best] = 0;
+                preyToCount[best]++;
+            }
+        }
+    }
+
+    BoidAgent FindBestPreyFor(OrcaAgent orca, Dictionary<BoidAgent, int> preyToCount)
+    {
+        BoidAgent best = null;
+        float bestScore = float.NegativeInfinity;
+        Vector3 pos = orca.Position;
+        var list = preyController.agents;
+        for (int i = 0; i < list.Count; i++)
+        {
+            var prey = list[i];
+            // limit share
+            int c = preyToCount.TryGetValue(prey, out int v) ? v : 0;
+            if (c >= maxOrcasPerPrey) continue;
+
+            // distance term (closer is better)
+            float d2 = (prey.Position - pos).sqrMagnitude;
+            float distScore = 1f / Mathf.Max(0.1f, Mathf.Sqrt(d2));
+
+            // isolation term: fewer neighbors nearby increases score
+            int neighbors = CountPreyNeighbors(prey.Position, 1.5f);
+            float isolationScore = 1f / Mathf.Max(1f, neighbors);
+
+            float score = wTargetDistance * distScore + wTargetIsolation * isolationScore;
+            if (score > bestScore)
+            {
+                bestScore = score;
+                best = prey;
+            }
+        }
+        return best;
+    }
+
+    BoidAgent FindNearestPrey(Vector3 pos)
+    {
+        BoidAgent best = null; float bestD2 = float.PositiveInfinity;
+        var list = preyController.agents;
+        for (int i = 0; i < list.Count; i++)
+        {
+            float d2 = (list[i].Position - pos).sqrMagnitude;
+            if (d2 < bestD2) { bestD2 = d2; best = list[i]; }
+        }
+        return best;
+    }
+
+    int CountPreyNeighbors(Vector3 center, float radius)
+    {
+        int count = 0;
+        float r2 = radius * radius;
+        var list = preyController.agents;
+        for (int i = 0; i < list.Count; i++)
+        {
+            Vector3 to = list[i].Position - center;
+            if (to.sqrMagnitude <= r2) count++;
+        }
+        return count;
     }
 
     // ---------------- UI (F2) + Save/Load ----------------
@@ -381,7 +607,6 @@ public class OrcaController : MonoBehaviour
         wDepth = wDepth,
         depthCenterBias = depthCenterBias,
         depthFollowPrey = depthFollowPrey,
-        drawDebug = drawDebug,
         showRoleText = showRoleText,
         killCount = killCount
     };
@@ -400,7 +625,6 @@ public class OrcaController : MonoBehaviour
         strikeRange = s.strikeRange; strikeBoost = s.strikeBoost; strikeCooldown = s.strikeCooldown;
         avoidDistance = s.avoidDistance; avoidProbeAngle = s.avoidProbeAngle; orcaRadius = s.orcaRadius;
         wDepth = s.wDepth; depthCenterBias = s.depthCenterBias; depthFollowPrey = s.depthFollowPrey;
-        drawDebug = s.drawDebug;
         showRoleText = s.showRoleText;
         killCount = s.killCount;
 
@@ -438,6 +662,57 @@ public class OrcaController : MonoBehaviour
         if (File.Exists(JsonPath)) LoadFromFile();
         else if (PlayerPrefs.HasKey(kPrefs)) LoadFromPrefs();
     }
+
+    void AutoFindCinemachine()
+    {
+        // Try to auto-resolve references so UI buttons work without manual assignment
+        if (freeLook == null)
+            freeLook = FindFirstObjectByType<CinemachineCamera>();
+        if (targetGroup == null)
+            targetGroup = FindFirstObjectByType<CinemachineTargetGroup>();
+        if (overviewCamera == null)
+            overviewCamera = FindFirstObjectByType<CinemachineCamera>();
+    }
+
+    void SyncTargetGroup()
+    {
+        if (targetGroup == null) return;
+        // Clear existing members and add pod transforms
+        var targets = new List<CinemachineTargetGroup.Target>(pod.Count);
+        for (int i = 0; i < pod.Count; i++)
+        {
+            targets.Add(new CinemachineTargetGroup.Target
+            {
+                Object = pod[i].transform,
+                Weight = 1f,
+                Radius = 1.5f
+            });
+        }
+        targetGroup.Targets = targets;
+    }
+
+    // ---------------- Cinemachine control ----------------
+    void Follow(OrcaAgent target)
+    {
+        if (freeLook == null || target == null) return;
+        freeLook.Follow = target.transform;
+        freeLook.LookAt = target.transform;
+        freeLook.Priority = 20;
+        if (overviewCamera != null) overviewCamera.Priority = 10;
+    }
+    void FollowByName(string roleName)
+    {
+        var t = pod.Find(o => o.name.StartsWith(roleName, StringComparison.OrdinalIgnoreCase));
+        if (t != null) Follow(t);
+    }
+    void ActivateOverviewCamera()
+    {
+        if (overviewCamera == null) return;
+        overviewCamera.Priority = 25;
+        if (freeLook != null) freeLook.Priority = 10;
+    }
+
+    public void ResetKillCount() { killCount = 0; }
 
     void OnGUI()
     {
@@ -483,7 +758,7 @@ public class OrcaController : MonoBehaviour
 
         GUILayout.Space(6);
         GUILayout.Label("<b>Obstacles</b>");
-        avoidDistance = SliderT("Avoid Dist", "Forward probe length for obstacle detection.", avoidDistance, 0.2f, 8f);
+        avoidDistance = SliderT("Avoid Dist", "Forward probe length for obstacle detection.", avoidDistance, 0.2f, 15f);
         avoidProbeAngle = SliderT("Avoid Angle", "Side probe spread to feel around obstacles.", avoidProbeAngle, 0f, 85f);
         orcaRadius = SliderT("Orca Radius", "Radius used for sweeps and spherecasts.", orcaRadius, 0.05f, 0.6f);
 
@@ -503,7 +778,19 @@ public class OrcaController : MonoBehaviour
         showRoleText = ToggleT("Show Role Text", "Show text labels above each orca indicating its role.", showRoleText);
 
         GUILayout.Space(6);
-        drawDebug = ToggleT("Draw Debug", "Render debug gizmos/lines.", drawDebug);
+        GUILayout.Label("<b>Camera</b>");
+        GUILayout.BeginHorizontal();
+        GUI.enabled = overviewCamera != null;
+        if (GUILayout.Button("Top-Down: Target Group")) ActivateOverviewCamera();
+        GUI.enabled = true;
+        GUILayout.EndHorizontal();
+        // Per-orca buttons by name
+        foreach (var o in pod)
+        {
+            GUI.enabled = freeLook != null;
+            if (GUILayout.Button($"FreeLook Follow: {o.name}")) Follow(o);
+            GUI.enabled = true;
+        }
 
         GUILayout.Space(6);
         GUILayout.BeginHorizontal();
@@ -597,11 +884,4 @@ public class OrcaController : MonoBehaviour
 #endif
     }
 
-    // Gizmo: draw ring around prey
-    void OnDrawGizmos()
-    {
-        if (!drawDebug || preyController == null) return;
-        Gizmos.color = new Color(1f, 0.4f, 0.1f, 0.2f);
-        Gizmos.DrawWireSphere(preyCentroid, encircleRadius);
-    }
 }

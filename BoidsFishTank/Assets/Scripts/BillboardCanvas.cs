@@ -1,8 +1,6 @@
 using UnityEngine;
-using TMPro;
 
-[RequireComponent(typeof(TextMeshPro))]
-public class BillboardTMP : MonoBehaviour
+public class BillboardCanvas : MonoBehaviour
 {
     public Camera targetCamera;
 

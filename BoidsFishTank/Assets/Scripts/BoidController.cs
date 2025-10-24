@@ -41,7 +41,15 @@ public class BoidController : MonoBehaviour
     [Header("Predator Avoidance")]
     public OrcaController predatorController;  // assign your OrcaController to make prey flee orcas
     public float predatorAvoidRadius = 2.5f;   // how far prey start reacting to orcas
-    public float weightPredatorAvoid = 2.0f;   // strength of predator avoidance
+    public float weightPredatorAvoid = 2.0f;   // base strength of predator avoidance
+    [Tooltip("Extra boost multiplier applied to predator avoidance when orca is very close.")]
+    public float predatorAvoidBoost = 2.0f;
+    [Tooltip("Distance within which the predator avoidance gets fully boosted.")]
+    public float predatorPanicRadius = 1.2f;
+
+    [Header("Vertical Steering")]
+    [Tooltip("Scale for up/down steering vs left/right. < 1 makes vertical turning harder.")]
+    public float verticalSteerDamping = 0.4f;
 
     [Header("Debug")]
     public bool drawDebug = false;
@@ -58,6 +66,8 @@ public class BoidController : MonoBehaviour
         public float weightSeparation, weightAlignment, weightCohesion, weightBounds, weightObstacleAvoid;
         public float avoidDistance, avoidProbeAngle;
         public float predatorAvoidRadius, weightPredatorAvoid;
+        public float predatorAvoidBoost, predatorPanicRadius;
+        public float verticalSteerDamping;
         public bool drawDebug;
     }
 
@@ -128,6 +138,9 @@ public class BoidController : MonoBehaviour
     void Respawn()
     {
         Spawn();
+        // Reset kill count when starting over
+        if (predatorController != null)
+            predatorController.ResetKillCount();
     }
 
     void ClearAgents()
@@ -147,6 +160,10 @@ public class BoidController : MonoBehaviour
         if (agent == null) return;
         agents.Remove(agent);
         Destroy(agent.gameObject);
+        // Decrease desired count to reflect kills, without forcing respawn
+        if (boidCount > 0) boidCount--;
+        // Keep lastSpawnCount in sync so Update() doesn't auto-respawn
+        lastSpawnCount = boidCount;
     }
 
     // ----------------- Steering -----------------
@@ -189,7 +206,7 @@ public class BoidController : MonoBehaviour
         Vector3 boundsForce = BoundsSteer(pos, vel);
         Vector3 avoid = ObstacleAvoid(pos, vel);
 
-        // Predator avoidance (flee orcas)
+        // Predator avoidance (flee orcas) with boost when close
         Vector3 predatorAvoid = Vector3.zero;
         if (predatorController != null && predatorController.pod != null && predatorController.pod.Count > 0)
         {
@@ -199,12 +216,18 @@ public class BoidController : MonoBehaviour
                 Vector3 to = o.transform.position - pos;
                 float d2 = to.sqrMagnitude;
                 if (d2 < r2 && d2 > 0.0001f)
-                    predatorAvoid -= to.normalized / Mathf.Sqrt(d2);
+                {
+                    float boost = 1f;
+                    if (d2 < predatorPanicRadius * predatorPanicRadius)
+                        boost = predatorAvoidBoost;
+                    predatorAvoid -= boost * to.normalized / Mathf.Sqrt(d2);
+                }
             }
             if (predatorAvoid.sqrMagnitude > 0.0001f)
                 predatorAvoid = predatorAvoid.normalized * maxSpeed - vel;
         }
 
+        // Combine forces
         Vector3 steer =
             weightSeparation * sep +
             weightAlignment * ali +
@@ -213,6 +236,10 @@ public class BoidController : MonoBehaviour
             weightObstacleAvoid * avoid +
             weightPredatorAvoid * predatorAvoid;
 
+        // Make vertical steering harder: scale Y component before clamping
+        steer.y *= verticalSteerDamping;
+
+        // Clamp final steering
         if (steer.sqrMagnitude > maxSteerForce * maxSteerForce)
             steer = steer.normalized * maxSteerForce;
 
@@ -285,7 +312,8 @@ public class BoidController : MonoBehaviour
         scroll = GUILayout.BeginScrollView(scroll);
 
         // Counts
-        boidCount = IntSliderT("Boid Count", "Number of prey agents simulated.", boidCount, 1, 2000);
+        boidCount = IntSliderT("Boid Count", "Number of prey agents simulated (decreases on kills).", boidCount, 1, 2000);
+        GUILayout.Label($"Current Count: <b>{agents.Count}</b>", new GUIStyle(GUI.skin.label) { richText = true });
 
         // Speeds
         minSpeed = SliderT("Min Speed", "Minimum cruising speed (prevents stalling).", minSpeed, 0.1f, maxSpeed);
@@ -319,6 +347,12 @@ public class BoidController : MonoBehaviour
         GUILayout.Label("<b>Predator</b>", new GUIStyle(GUI.skin.label) { richText = true });
         predatorAvoidRadius = SliderT("Predator Radius", "Distance within which prey react to orcas.", predatorAvoidRadius, 0.5f, 10f);
         weightPredatorAvoid = SliderT("W Predator", "Strength of fleeing response from orcas.", weightPredatorAvoid, 0f, 10f);
+        predatorPanicRadius = SliderT("Panic Radius", "Within this distance, boost predator avoidance.", predatorPanicRadius, 0.2f, 5f);
+        predatorAvoidBoost = SliderT("Panic Boost", "Multiplier for predator avoidance inside Panic Radius.", predatorAvoidBoost, 1f, 5f);
+
+        GUILayout.Space(6);
+        GUILayout.Label("<b>Vertical Steering</b>", new GUIStyle(GUI.skin.label) { richText = true });
+        verticalSteerDamping = SliderT("Vertical Damping", "Scale for up/down steering vs left/right (<1 = harder to steer vertically).", verticalSteerDamping, 0.1f, 1f);
 
         // Debug
         drawDebug = ToggleT("Draw Debug", "Render debug gizmos/lines.", drawDebug);
@@ -430,6 +464,9 @@ public class BoidController : MonoBehaviour
             avoidProbeAngle = avoidProbeAngle,
             predatorAvoidRadius = predatorAvoidRadius,
             weightPredatorAvoid = weightPredatorAvoid,
+            predatorAvoidBoost = predatorAvoidBoost,
+            predatorPanicRadius = predatorPanicRadius,
+            verticalSteerDamping = verticalSteerDamping,
             drawDebug = drawDebug
         };
     }
@@ -445,6 +482,8 @@ public class BoidController : MonoBehaviour
         weightSeparation = s.weightSeparation; weightAlignment = s.weightAlignment; weightCohesion = s.weightCohesion; weightBounds = s.weightBounds; weightObstacleAvoid = s.weightObstacleAvoid;
         avoidDistance = s.avoidDistance; avoidProbeAngle = s.avoidProbeAngle;
         predatorAvoidRadius = s.predatorAvoidRadius; weightPredatorAvoid = s.weightPredatorAvoid;
+        predatorAvoidBoost = s.predatorAvoidBoost; predatorPanicRadius = s.predatorPanicRadius;
+        verticalSteerDamping = s.verticalSteerDamping;
         drawDebug = s.drawDebug;
 
         if (respawnIfNeeded && needRespawn) Respawn();
