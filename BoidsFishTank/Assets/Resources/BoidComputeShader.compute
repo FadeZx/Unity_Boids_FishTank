@@ -1,0 +1,277 @@
+#pragma kernel CSMain
+
+struct BoidData
+{
+    float3 position;
+    float3 velocity;
+    float3 acceleration;
+    int targetIndex; // for orcas to track prey
+};
+
+// Buffers
+RWStructuredBuffer<BoidData> boidBuffer;
+StructuredBuffer<BoidData> preyBuffer; // for orcas to read prey positions
+
+// Parameters
+float deltaTime;
+float minSpeed;
+float maxSpeed;
+float maxSteerForce;
+float neighborRadius;
+float separationRadius;
+float weightSeparation;
+float weightAlignment;
+float weightCohesion;
+float weightBounds;
+float3 boundsMin;
+float3 boundsMax;
+float boundsPadding;
+
+// Predator parameters
+float predatorAvoidRadius;
+float weightPredatorAvoid;
+float predatorAvoidBoost;
+float predatorPanicRadius;
+int isPredator; // 0 = prey, 1 = predator
+int preyCount;
+
+// Hunt parameters (for orcas)
+float huntRadius;
+float strikeRange;
+float weightPursuit;
+
+// Vertical steering
+float verticalSteerDamping;
+
+// Depth parameters
+float weightDepth;
+float depthCenterBias;
+float depthFollowPrey;
+
+[numthreads(64,1,1)]
+void CSMain (uint3 id : SV_DispatchThreadID)
+{
+    uint index = id.x;
+    uint numBoids;
+    uint stride;
+    boidBuffer.GetDimensions(numBoids, stride);
+    
+    if (index >= numBoids) return;
+    
+    BoidData boid = boidBuffer[index];
+    float3 pos = boid.position;
+    float3 vel = boid.velocity;
+    
+    // Boid forces
+    float3 separation = float3(0, 0, 0);
+    float3 alignment = float3(0, 0, 0);
+    float3 cohesion = float3(0, 0, 0);
+    int neighborCount = 0;
+    
+    float nRad2 = neighborRadius * neighborRadius;
+    float sRad2 = separationRadius * separationRadius;
+    
+    // Calculate boid interactions
+    for (uint i = 0; i < numBoids; i++)
+    {
+        if (i == index) continue;
+        
+        BoidData other = boidBuffer[i];
+        float3 offset = other.position - pos;
+        float dist2 = dot(offset, offset);
+        
+        if (dist2 < nRad2 && dist2 > 0.0001f)
+        {
+            neighborCount++;
+            float dist = sqrt(dist2);
+            
+            // Separation
+            if (dist2 < sRad2)
+            {
+                separation -= normalize(offset) / dist;
+            }
+            
+            // Alignment
+            alignment += other.velocity;
+            
+            // Cohesion
+            cohesion += other.position;
+        }
+    }
+    
+    // Average neighbor forces
+    if (neighborCount > 0)
+    {
+        alignment = normalize(alignment / neighborCount) * maxSpeed - vel;
+        cohesion = (cohesion / neighborCount) - pos;
+    }
+    
+    if (length(separation) > 0.0001f)
+    {
+        separation = normalize(separation) * maxSpeed - vel;
+    }
+    
+    // Bounds steering
+    float3 boundsForce = float3(0, 0, 0);
+    float3 target = pos;
+    
+    if (pos.x < boundsMin.x + boundsPadding) target.x = boundsMin.x + boundsPadding;
+    else if (pos.x > boundsMax.x - boundsPadding) target.x = boundsMax.x - boundsPadding;
+    
+    if (pos.y < boundsMin.y + boundsPadding) target.y = boundsMin.y + boundsPadding;
+    else if (pos.y > boundsMax.y - boundsPadding) target.y = boundsMax.y - boundsPadding;
+    
+    if (pos.z < boundsMin.z + boundsPadding) target.z = boundsMin.z + boundsPadding;
+    else if (pos.z > boundsMax.z - boundsPadding) target.z = boundsMax.z - boundsPadding;
+    
+    if (!all(target == pos))
+    {
+        float3 desired = normalize(target - pos) * maxSpeed;
+        boundsForce = desired - vel;
+    }
+    
+    // Predator-prey interactions
+    float3 predatorForce = float3(0, 0, 0);
+    float3 preyCentroid = float3(0, 0, 0);
+    int preyNeighbors = 0;
+    
+    if (isPredator == 0) // Prey behavior: avoid predators
+    {
+        // Read from predator buffer (assuming orcas are in same buffer after prey)
+        for (uint p = preyCount; p < numBoids; p++)
+        {
+            BoidData predator = boidBuffer[p];
+            float3 toPredator = predator.position - pos;
+            float dist2 = dot(toPredator, toPredator);
+            float r2 = predatorAvoidRadius * predatorAvoidRadius;
+            
+            if (dist2 < r2 && dist2 > 0.0001f)
+            {
+                float boost = 1.0f;
+                if (dist2 < predatorPanicRadius * predatorPanicRadius)
+                {
+                    boost = predatorAvoidBoost;
+                }
+                predatorForce -= boost * normalize(toPredator) / sqrt(dist2);
+            }
+        }
+        
+        if (length(predatorForce) > 0.0001f)
+        {
+            predatorForce = normalize(predatorForce) * maxSpeed - vel;
+        }
+    }
+    else // Predator behavior: hunt prey
+    {
+        uint preyBufferSize;
+        uint preyStride;
+        preyBuffer.GetDimensions(preyBufferSize, preyStride);
+        
+        // Find nearest prey
+        float nearestDist2 = huntRadius * huntRadius;
+        float3 targetPos = float3(0, 0, 0);
+        bool hasTarget = false;
+        
+        for (uint p = 0; p < preyBufferSize; p++)
+        {
+            BoidData prey = preyBuffer[p];
+            float3 toPrey = prey.position - pos;
+            float dist2 = dot(toPrey, toPrey);
+            
+            if (dist2 < nearestDist2)
+            {
+                nearestDist2 = dist2;
+                targetPos = prey.position;
+                hasTarget = true;
+                
+                // Calculate prey centroid for depth following
+                preyCentroid += prey.position;
+                preyNeighbors++;
+            }
+        }
+        
+        if (hasTarget)
+        {
+            // Pursuit behavior
+            float3 toPrey = targetPos - pos;
+            float dist = sqrt(nearestDist2);
+            
+            // Intercept calculation
+            BoidData targetPrey = preyBuffer[0]; // Simplified - use first prey for velocity
+            float interceptTime = dist / (maxSpeed + length(targetPrey.velocity));
+            float3 interceptPos = targetPos + targetPrey.velocity * interceptTime;
+            
+            predatorForce = normalize(interceptPos - pos) * maxSpeed - vel;
+            predatorForce *= weightPursuit;
+            
+            // Strike boost when close
+            if (dist < strikeRange)
+            {
+                predatorForce *= 2.0f;
+            }
+        }
+        
+        // Average prey centroid for depth following
+        if (preyNeighbors > 0)
+        {
+            preyCentroid /= preyNeighbors;
+        }
+    }
+    
+    // Depth steering (for orcas mainly)
+    float3 depthForce = float3(0, 0, 0);
+    if (isPredator == 1 && weightDepth > 0.0f)
+    {
+        float centerY = lerp(boundsMin.y, boundsMax.y, depthCenterBias);
+        float targetY = centerY;
+        
+        if (preyNeighbors > 0)
+        {
+            targetY = lerp(centerY, preyCentroid.y, depthFollowPrey);
+        }
+        
+        depthForce = float3(0, targetY - pos.y, 0);
+    }
+    
+    // Combine forces
+    float3 steer = weightSeparation * separation +
+                   weightAlignment * alignment +
+                   weightCohesion * cohesion +
+                   weightBounds * boundsForce +
+                   weightPredatorAvoid * predatorForce +
+                   weightDepth * depthForce;
+    
+    // Apply vertical damping
+    steer.y *= verticalSteerDamping;
+    
+    // Limit steering force
+    if (length(steer) > maxSteerForce)
+    {
+        steer = normalize(steer) * maxSteerForce;
+    }
+    
+    // Update velocity and position
+    vel += steer * deltaTime;
+    
+    // Limit speed
+    float speed = length(vel);
+    if (speed < minSpeed)
+    {
+        vel = normalize(vel) * minSpeed;
+    }
+    else if (speed > maxSpeed)
+    {
+        vel = normalize(vel) * maxSpeed;
+    }
+    
+    pos += vel * deltaTime;
+    
+    // Hard bounds clamping
+    pos = clamp(pos, boundsMin, boundsMax);
+    
+    // Write back
+    boid.position = pos;
+    boid.velocity = vel;
+    boid.acceleration = steer;
+    boidBuffer[index] = boid;
+}

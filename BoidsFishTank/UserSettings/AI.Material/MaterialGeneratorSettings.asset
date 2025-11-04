@@ -18,27 +18,30 @@ MonoBehaviour:
         serializedData:
         - key: 0
           value:
-            rid: 6147369588307788358
+            rid: 4625877509039981251
         - key: 1
           value:
-            rid: 6147369588307788359
+            rid: 4625877509039981252
         - key: 2
           value:
-            rid: 6147369588307788360
+            rid: 4625877509039981253
       lastMaterialMappings:
         serializedData:
         - key: Nature/Terrain/Standard
           value:
-            rid: 6147369588307788206
+            rid: 4625877509039981033
         - key: Standard (Specular setup)
           value:
-            rid: 6147369588307788207
+            rid: 4625877509039981034
+        - key: Custom/GPUBoidShader
+          value:
+            rid: 4625877509039981035
       previewSettings:
         sizeFactor: 1
   references:
     version: 2
     RefIds:
-    - rid: 6147369588307788206
+    - rid: 4625877509039981033
       type: {class: 'SerializableDictionary`2[[Unity.AI.Material.Services.Stores.States.MapType, Unity.AI.Material],[System.String, mscorlib]]', ns: Unity.AI.Generators.Redux.Toolkit, asm: Unity.AI.Generators.Redux}
       data:
         serializedData:
@@ -64,7 +67,7 @@ MonoBehaviour:
           value: None
         - key: 11
           value: _MaskMap
-    - rid: 6147369588307788207
+    - rid: 4625877509039981034
       type: {class: 'SerializableDictionary`2[[Unity.AI.Material.Services.Stores.States.MapType, Unity.AI.Material],[System.String, mscorlib]]', ns: Unity.AI.Generators.Redux.Toolkit, asm: Unity.AI.Generators.Redux}
       data:
         serializedData:
@@ -90,15 +93,41 @@ MonoBehaviour:
           value: None
         - key: 11
           value: None
-    - rid: 6147369588307788358
+    - rid: 4625877509039981035
+      type: {class: 'SerializableDictionary`2[[Unity.AI.Material.Services.Stores.States.MapType, Unity.AI.Material],[System.String, mscorlib]]', ns: Unity.AI.Generators.Redux.Toolkit, asm: Unity.AI.Generators.Redux}
+      data:
+        serializedData:
+        - key: 1
+          value: None
+        - key: 2
+          value: None
+        - key: 3
+          value: None
+        - key: 4
+          value: None
+        - key: 5
+          value: None
+        - key: 6
+          value: _MainTex
+        - key: 7
+          value: None
+        - key: 8
+          value: None
+        - key: 9
+          value: None
+        - key: 10
+          value: None
+        - key: 11
+          value: None
+    - rid: 4625877509039981251
       type: {class: ModelSelection, ns: Unity.AI.Material.Services.Stores.States, asm: Unity.AI.Material}
       data:
         modelID: 44ec3749-963a-44b1-aa54-dc19f6ed8ab2
-    - rid: 6147369588307788359
+    - rid: 4625877509039981252
       type: {class: ModelSelection, ns: Unity.AI.Material.Services.Stores.States, asm: Unity.AI.Material}
       data:
         modelID: 
-    - rid: 6147369588307788360
+    - rid: 4625877509039981253
       type: {class: ModelSelection, ns: Unity.AI.Material.Services.Stores.States, asm: Unity.AI.Material}
       data:
         modelID: 

@@ -15,12 +15,22 @@ public class OrcaController : MonoBehaviour
     public BoxCollider simulationArea;         // same tank
     public BoidController preyController;      // assign your prey BoidController
     public OrcaAgent orcaPrefab;               // predator prefab
+    [Tooltip("Tank area collider - orcas will avoid spawning inside this area but use it for movement boundaries")]
+    public Collider tankAreaCollider;
 
     [Header("Role Counts")]
     public int leaders = 1;
     public int flankers = 3;
     public int strikers = 2;
     public int supports = 2;
+
+    [Header("Spawning")]
+    [Tooltip("Distance from tank center for spawning ring (gizmo shows exact radius you set)")]
+    public float spawnRadius = 8.0f;
+    [Tooltip("Center point for spawning ring (if not set, uses tank center when tank area exists)")]
+    public Transform spawnCenter;
+    [Tooltip("Maximum attempts to find valid spawn position outside tank")]
+    public int maxSpawnAttempts = 50;
 
     [Header("Speeds")]
     public float minSpeed = 2.2f;
@@ -157,7 +167,13 @@ public class OrcaController : MonoBehaviour
             }
         }
 
-       
+#if UNITY_EDITOR
+        // Force gizmo updates in editor when spawn center moves
+        if (spawnCenter != null)
+        {
+            UnityEditor.EditorApplication.QueuePlayerLoopUpdate();
+        }
+#endif
     }
 
     // ---------------- Spawning / Roles ----------------
@@ -167,16 +183,13 @@ public class OrcaController : MonoBehaviour
         killCount = 0;
         Clear();
         var b = simulationArea.bounds;
+        Vector3 centerPoint = spawnCenter ? spawnCenter.position : simulationArea.bounds.center;
 
         void SpawnRole(int count, OrcaRole role)
         {
             for (int i = 0; i < count; i++)
             {
-                Vector3 p = new Vector3(
-                    UnityEngine.Random.Range(b.min.x, b.max.x),
-                    UnityEngine.Random.Range(b.min.y, b.max.y),
-                    UnityEngine.Random.Range(b.min.z, b.max.z)
-                );
+                Vector3 p = GetValidSpawnPosition(centerPoint, b);
                 var a = Instantiate(orcaPrefab, p, Quaternion.identity, transform);
                 a.controller = this;
                 a.role = role;
@@ -193,6 +206,104 @@ public class OrcaController : MonoBehaviour
 
         // Sync TargetGroup members
         SyncTargetGroup();
+    }
+
+    Vector3 GetValidSpawnPosition(Vector3 centerPoint, Bounds area)
+    {
+        // Always use the centerPoint passed in (which is already spawn center or fallback)
+        Vector3 spawnCenterPos = centerPoint;
+        
+        // If no tank area is defined, just spawn within radius around the spawn center
+        if (tankAreaCollider == null)
+        {
+            Vector3 randomOffset = UnityEngine.Random.insideUnitSphere * spawnRadius;
+            Vector3 pos = spawnCenterPos + randomOffset;
+            
+            // Clamp to simulation area bounds
+            pos.x = Mathf.Clamp(pos.x, area.min.x, area.max.x);
+            pos.y = Mathf.Clamp(pos.y, area.min.y, area.max.y);
+            pos.z = Mathf.Clamp(pos.z, area.min.z, area.max.z);
+            return pos;
+        }
+
+        Bounds tankBounds = tankAreaCollider.bounds;
+        
+        // Strategy 1: Try to spawn in a ring around the spawn center at the specified radius
+        for (int attempt = 0; attempt < maxSpawnAttempts; attempt++)
+        {
+            // Generate position on a sphere around the spawn center
+            Vector3 randomDirection = UnityEngine.Random.onUnitSphere;
+            
+            // Calculate minimum distance to be outside tank
+            float tankMaxExtent = Mathf.Max(tankBounds.size.x, tankBounds.size.y, tankBounds.size.z) * 0.5f;
+            float minDistanceFromTank = tankMaxExtent + 1.5f; // 1.5 unit buffer for orcas
+            
+            // Use spawn radius (user's setting), but warn if it's too small
+            float spawnDistance = spawnRadius;
+            if (spawnRadius < minDistanceFromTank && attempt == 0)
+            {
+                Debug.LogWarning($"OrcaController: Spawn radius ({spawnRadius:F1}) is smaller than safe distance ({minDistanceFromTank:F1}). Some orcas may spawn inside tank.");
+            }
+            
+            Vector3 candidatePos = spawnCenterPos + randomDirection * spawnDistance;
+            
+            // Clamp to simulation area bounds
+            candidatePos.x = Mathf.Clamp(candidatePos.x, area.min.x, area.max.x);
+            candidatePos.y = Mathf.Clamp(candidatePos.y, area.min.y, area.max.y);
+            candidatePos.z = Mathf.Clamp(candidatePos.z, area.min.z, area.max.z);
+            
+            // Verify position is outside tank area
+            if (!tankBounds.Contains(candidatePos))
+            {
+                return candidatePos;
+            }
+        }
+        
+        // Strategy 2: Try spawning in corners/edges of simulation area (away from tank)
+        Debug.LogWarning($"OrcaController: Ring spawn failed, trying corner/edge spawn.");
+        
+        Vector3[] cornerOffsets = new Vector3[]
+        {
+            new Vector3(1, 1, 1),   // top-front-right
+            new Vector3(-1, 1, 1),  // top-front-left
+            new Vector3(1, 1, -1),  // top-back-right
+            new Vector3(-1, 1, -1), // top-back-left
+            new Vector3(1, -1, 1),  // bottom-front-right
+            new Vector3(-1, -1, 1), // bottom-front-left
+            new Vector3(1, -1, -1), // bottom-back-right
+            new Vector3(-1, -1, -1) // bottom-back-left
+        };
+        
+        for (int attempt = 0; attempt < cornerOffsets.Length; attempt++)
+        {
+            Vector3 cornerDir = cornerOffsets[attempt].normalized;
+            Vector3 cornerPos = area.center + Vector3.Scale(cornerDir, area.size * 0.4f);
+            
+            // Add some randomness around the corner
+            Vector3 randomOffset = UnityEngine.Random.insideUnitSphere * (spawnRadius * 0.5f);
+            Vector3 candidatePos = cornerPos + randomOffset;
+            
+            // Clamp to simulation area bounds
+            candidatePos.x = Mathf.Clamp(candidatePos.x, area.min.x, area.max.x);
+            candidatePos.y = Mathf.Clamp(candidatePos.y, area.min.y, area.max.y);
+            candidatePos.z = Mathf.Clamp(candidatePos.z, area.min.z, area.max.z);
+            
+            if (!tankBounds.Contains(candidatePos))
+            {
+                return candidatePos;
+            }
+        }
+        
+        // Last resort: spawn at simulation area edge, far from tank
+        Debug.LogWarning($"OrcaController: Using last resort spawn position at simulation area edge.");
+        Vector3 tankToAreaCenter = (area.center - tankBounds.center).normalized;
+        Vector3 edgePos = area.center + Vector3.Scale(tankToAreaCenter, area.size * 0.45f);
+        
+        return new Vector3(
+            Mathf.Clamp(edgePos.x, area.min.x, area.max.x),
+            Mathf.Clamp(edgePos.y, area.min.y, area.max.y),
+            Mathf.Clamp(edgePos.z, area.min.z, area.max.z)
+        );
     }
 
     public void Clear()
@@ -577,6 +688,8 @@ public class OrcaController : MonoBehaviour
         public bool drawDebug;
         public bool showRoleText;
         public int killCount;
+        public float spawnRadius;
+        public int maxSpawnAttempts;
     }
 
     OrcaSettings Collect() => new()
@@ -608,7 +721,9 @@ public class OrcaController : MonoBehaviour
         depthCenterBias = depthCenterBias,
         depthFollowPrey = depthFollowPrey,
         showRoleText = showRoleText,
-        killCount = killCount
+        killCount = killCount,
+        spawnRadius = spawnRadius,
+        maxSpawnAttempts = maxSpawnAttempts
     };
 
     void Apply(OrcaSettings s, bool respawn)
@@ -627,6 +742,8 @@ public class OrcaController : MonoBehaviour
         wDepth = s.wDepth; depthCenterBias = s.depthCenterBias; depthFollowPrey = s.depthFollowPrey;
         showRoleText = s.showRoleText;
         killCount = s.killCount;
+        spawnRadius = s.spawnRadius;
+        maxSpawnAttempts = s.maxSpawnAttempts;
 
         if (respawn && countsChanged) SpawnPod();
     }
@@ -730,6 +847,11 @@ public class OrcaController : MonoBehaviour
         strikers = IntSliderT("Strikers", "Orcas that dash in to strike when close.", strikers, 0, 16);
         supports = IntSliderT("Supports", "Orcas that stay behind prey to corral it.", supports, 0, 16);
         if (GUILayout.Button("Respawn Pod")) SpawnPod();
+
+        GUILayout.Space(6);
+        GUILayout.Label("<b>Spawning</b>", new GUIStyle(GUI.skin.label) { richText = true });
+        spawnRadius = SliderT("Spawn Radius", "Distance from tank center for spawning ring (gizmo shows exact radius).", spawnRadius, 1f, 30f);
+        maxSpawnAttempts = IntSliderT("Max Spawn Attempts", "Maximum attempts to find valid spawn position outside tank.", maxSpawnAttempts, 10, 200);
 
         GUILayout.Space(6);
         GUILayout.Label("<b>Speeds</b>");
@@ -874,6 +996,18 @@ public class OrcaController : MonoBehaviour
         return t;
     }
 
+    // --- Validation for real-time gizmo updates ---
+#if UNITY_EDITOR
+    void OnValidate()
+    {
+        // This forces gizmos to update when inspector values change
+        if (Application.isPlaying)
+        {
+            UnityEditor.EditorApplication.QueuePlayerLoopUpdate();
+        }
+    }
+#endif
+
     // input helpers
     bool KeyDown_F2()
     {
@@ -882,6 +1016,72 @@ public class OrcaController : MonoBehaviour
 #else
         return Input.GetKeyDown(KeyCode.F2);
 #endif
+    }
+
+    // ------------- Gizmos -------------
+    void OnDrawGizmosSelected()
+    {
+        // Draw simulation area (orange) - only when selected for clarity
+        if (simulationArea)
+        {
+            Gizmos.color = new Color(1f, 0.5f, 0f, 0.15f);
+            Gizmos.DrawCube(simulationArea.bounds.center, simulationArea.bounds.size);
+            Gizmos.color = new Color(1f, 0.5f, 0f, 0.5f);
+            Gizmos.DrawWireCube(simulationArea.bounds.center, simulationArea.bounds.size);
+        }
+        
+        // Draw tank area (red - avoid spawning here) - only when selected
+        if (tankAreaCollider)
+        {
+            Gizmos.color = new Color(1f, 0f, 0f, 0.15f);
+            Gizmos.DrawCube(tankAreaCollider.bounds.center, tankAreaCollider.bounds.size);
+            
+            Gizmos.color = new Color(1f, 0f, 0f, 0.7f);
+            Gizmos.DrawWireCube(tankAreaCollider.bounds.center, tankAreaCollider.bounds.size);
+        }
+        
+        // Draw detailed spawn area info when selected
+        Vector3 centerPoint;
+        if (tankAreaCollider)
+        {
+            // Always use spawn center if set, otherwise use simulation area center (not tank center)
+            centerPoint = spawnCenter ? spawnCenter.position : simulationArea.bounds.center;
+            float tankMaxExtent = Mathf.Max(tankAreaCollider.bounds.size.x, tankAreaCollider.bounds.size.y, tankAreaCollider.bounds.size.z) * 0.5f;
+            float minDistanceFromTank = tankMaxExtent + 1.5f;
+            
+            // Draw minimum safe distance (yellow) if different from spawn radius
+            if (spawnRadius < minDistanceFromTank)
+            {
+                Gizmos.color = new Color(1f, 1f, 0f, 0.3f);
+                Gizmos.DrawWireSphere(centerPoint, minDistanceFromTank);
+            }
+        }
+    }
+
+    void OnDrawGizmos()
+    {
+        // Always show spawn area (visible for orcas since they're important predators)
+        Vector3 centerPoint;
+        if (tankAreaCollider)
+        {
+            // Always use spawn center if set, otherwise use simulation area center (consistent with spawning logic)
+            centerPoint = spawnCenter ? spawnCenter.position : simulationArea.bounds.center;
+        }
+        else
+        {
+            centerPoint = spawnCenter ? spawnCenter.position : (simulationArea ? simulationArea.bounds.center : transform.position);
+        }
+        
+        // Show spawn radius with subtle transparency
+        Gizmos.color = new Color(1f, 0.5f, 0f, 0.08f);
+        Gizmos.DrawSphere(centerPoint, spawnRadius);
+        
+        Gizmos.color = new Color(1f, 0.5f, 0f, 0.3f);
+        Gizmos.DrawWireSphere(centerPoint, spawnRadius);
+        
+        // Show spawn center point
+        Gizmos.color = new Color(1f, 0.5f, 0f, 0.6f);
+        Gizmos.DrawWireCube(centerPoint, Vector3.one * 0.4f);
     }
 
 }
