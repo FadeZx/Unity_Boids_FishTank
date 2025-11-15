@@ -21,6 +21,24 @@ MonoBehaviour:
         - globalObjectIdString: GlobalObjectId_V1-2-265b46aa1045596409a6b31ba1158e4b-1320613406-0
         - globalObjectIdString: GlobalObjectId_V1-2-265b46aa1045596409a6b31ba1158e4b-1500318794-0
         - globalObjectIdString: GlobalObjectId_V1-2-265b46aa1045596409a6b31ba1158e4b-174183052-0
+        - globalObjectIdString: GlobalObjectId_V1-2-265b46aa1045596409a6b31ba1158e4b-1536321420-0
+        - globalObjectIdString: GlobalObjectId_V1-2-265b46aa1045596409a6b31ba1158e4b-1348547393-0
+        - globalObjectIdString: GlobalObjectId_V1-2-265b46aa1045596409a6b31ba1158e4b-5620585382517006499-0
+        - globalObjectIdString: GlobalObjectId_V1-2-265b46aa1045596409a6b31ba1158e4b-1597614135-0
+        - globalObjectIdString: GlobalObjectId_V1-2-265b46aa1045596409a6b31ba1158e4b-1382442554003631945-0
+        - globalObjectIdString: GlobalObjectId_V1-2-265b46aa1045596409a6b31ba1158e4b-524594080-0
+        - globalObjectIdString: GlobalObjectId_V1-2-265b46aa1045596409a6b31ba1158e4b-898133960-0
+        - globalObjectIdString: GlobalObjectId_V1-2-265b46aa1045596409a6b31ba1158e4b-50660685-0
+        - globalObjectIdString: GlobalObjectId_V1-2-265b46aa1045596409a6b31ba1158e4b-1088245939-0
+        - globalObjectIdString: GlobalObjectId_V1-2-265b46aa1045596409a6b31ba1158e4b-224350840-0
+        - globalObjectIdString: GlobalObjectId_V1-2-265b46aa1045596409a6b31ba1158e4b-111046435-0
+        - globalObjectIdString: GlobalObjectId_V1-2-265b46aa1045596409a6b31ba1158e4b-470941960-0
+        - globalObjectIdString: GlobalObjectId_V1-2-265b46aa1045596409a6b31ba1158e4b-150923638-0
+        - globalObjectIdString: GlobalObjectId_V1-2-265b46aa1045596409a6b31ba1158e4b-1633987464-0
+        - globalObjectIdString: GlobalObjectId_V1-2-265b46aa1045596409a6b31ba1158e4b-116687063-0
+        - globalObjectIdString: GlobalObjectId_V1-2-265b46aa1045596409a6b31ba1158e4b-287447062-0
+        - globalObjectIdString: GlobalObjectId_V1-2-265b46aa1045596409a6b31ba1158e4b-1604424820-0
+        - globalObjectIdString: GlobalObjectId_V1-2-265b46aa1045596409a6b31ba1158e4b-348316885-0
         values:
         - colorIndex: 5
           iconNameOrGuid: 
@@ -30,8 +48,80 @@ MonoBehaviour:
           iconNameOrGuid: 
           isIconRecursive: 0
           isColorRecursive: 0
-        - colorIndex: 4
+        - colorIndex: 5
           iconNameOrGuid: 
+          isIconRecursive: 0
+          isColorRecursive: 0
+        - colorIndex: 5
+          iconNameOrGuid: 
+          isIconRecursive: 0
+          isColorRecursive: 0
+        - colorIndex: 5
+          iconNameOrGuid: 
+          isIconRecursive: 0
+          isColorRecursive: 0
+        - colorIndex: 5
+          iconNameOrGuid: 
+          isIconRecursive: 0
+          isColorRecursive: 0
+        - colorIndex: 5
+          iconNameOrGuid: 
+          isIconRecursive: 0
+          isColorRecursive: 0
+        - colorIndex: 5
+          iconNameOrGuid: 
+          isIconRecursive: 0
+          isColorRecursive: 0
+        - colorIndex: 5
+          iconNameOrGuid: 
+          isIconRecursive: 0
+          isColorRecursive: 0
+        - colorIndex: 5
+          iconNameOrGuid: 
+          isIconRecursive: 0
+          isColorRecursive: 0
+        - colorIndex: 0
+          iconNameOrGuid: SceneViewCamera On
+          isIconRecursive: 0
+          isColorRecursive: 0
+        - colorIndex: 0
+          iconNameOrGuid: SceneViewCamera On
+          isIconRecursive: 0
+          isColorRecursive: 0
+        - colorIndex: 0
+          iconNameOrGuid: SceneViewCamera On
+          isIconRecursive: 1
+          isColorRecursive: 0
+        - colorIndex: 0
+          iconNameOrGuid: SceneViewCamera On
+          isIconRecursive: 0
+          isColorRecursive: 0
+        - colorIndex: 0
+          iconNameOrGuid: Light Icon
+          isIconRecursive: 0
+          isColorRecursive: 0
+        - colorIndex: 6
+          iconNameOrGuid: BoxCollider Icon
+          isIconRecursive: 0
+          isColorRecursive: 0
+        - colorIndex: 0
+          iconNameOrGuid: SceneViewCamera On
+          isIconRecursive: 0
+          isColorRecursive: 0
+        - colorIndex: 0
+          iconNameOrGuid: SceneViewCamera On
+          isIconRecursive: 0
+          isColorRecursive: 0
+        - colorIndex: 1
+          iconNameOrGuid: 
+          isIconRecursive: 0
+          isColorRecursive: 0
+        - colorIndex: 9
+          iconNameOrGuid: 
+          isIconRecursive: 0
+          isColorRecursive: 0
+        - colorIndex: 0
+          iconNameOrGuid: WindZone Icon
           isIconRecursive: 0
           isColorRecursive: 0
   bookmarks: []

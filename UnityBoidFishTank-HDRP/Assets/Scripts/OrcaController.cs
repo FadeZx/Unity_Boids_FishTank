@@ -6,7 +6,6 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using UnityEngine;
-using Unity.Cinemachine;
 
 [DefaultExecutionOrder(-49)] // after BoidController (-50)
 public class OrcaController : MonoBehaviour
@@ -16,7 +15,7 @@ public class OrcaController : MonoBehaviour
     public BoidController preyController;      // assign your prey BoidController
     public OrcaAgent orcaPrefab;               // predator prefab
     [Tooltip("Tank area collider - orcas will avoid spawning inside this area but use it for movement boundaries")]
-    public Collider tankAreaCollider;
+
 
     [Header("Role Counts")]
     public int leaders = 1;
@@ -97,13 +96,9 @@ public class OrcaController : MonoBehaviour
     [Tooltip("Camera used for role label billboarding. If not set, Camera.main is used.")]
     public Camera labelCamera;
 
-    [Header("Cinemachine")]
-    [Tooltip("Assign your FreeLook camera (v3 uses CinemachineCamera with FreeLook components). Assign your FreeLook CinemachineCamera here.")]
-    public CinemachineCamera freeLook;
-    [Tooltip("Assign your Target Group for overview camera.")]
-    public CinemachineTargetGroup targetGroup;
-    [Tooltip("Assign your overview Virtual Camera that looks at the Target Group.")]
-    public CinemachineCamera overviewCamera;
+    [Header("Camera Control")]
+    [Tooltip("Separate component that manages Cinemachine cameras and UI actions for this controller.")]
+    public OrcaCameraController cameraController;
 
     [Tooltip("Total number of prey killed by orcas this session.")]
     public int killCount = 0;
@@ -127,12 +122,13 @@ public class OrcaController : MonoBehaviour
         TryLoad();
         if (labelCamera == null) labelCamera = Camera.main;
 
-        // Auto-find Cinemachine components if not assigned
-        AutoFindCinemachine();
+        if (!cameraController)
+            cameraController = GetComponent<OrcaCameraController>();
+        if (cameraController != null)
+            cameraController.Initialize(this);
 
         SpawnPod();
-        // Populate target group with spawned orcas
-        SyncTargetGroup();
+        cameraController?.SyncTargetGroup(pod);
     }
 
     void Update()
@@ -205,7 +201,7 @@ public class OrcaController : MonoBehaviour
         SpawnRole(Mathf.Max(0, supports), OrcaRole.Support);
 
         // Sync TargetGroup members
-        SyncTargetGroup();
+        cameraController?.SyncTargetGroup(pod);
     }
 
     Vector3 GetValidSpawnPosition(Vector3 centerPoint, Bounds area)
@@ -214,7 +210,7 @@ public class OrcaController : MonoBehaviour
         Vector3 spawnCenterPos = centerPoint;
         
         // If no tank area is defined, just spawn within radius around the spawn center
-        if (tankAreaCollider == null)
+        if (simulationArea == null)
         {
             Vector3 randomOffset = UnityEngine.Random.insideUnitSphere * spawnRadius;
             Vector3 pos = spawnCenterPos + randomOffset;
@@ -226,7 +222,7 @@ public class OrcaController : MonoBehaviour
             return pos;
         }
 
-        Bounds tankBounds = tankAreaCollider.bounds;
+        Bounds tankBounds = simulationArea.bounds;
         
         // Strategy 1: Try to spawn in a ring around the spawn center at the specified radius
         for (int attempt = 0; attempt < maxSpawnAttempts; attempt++)
@@ -780,55 +776,6 @@ public class OrcaController : MonoBehaviour
         else if (PlayerPrefs.HasKey(kPrefs)) LoadFromPrefs();
     }
 
-    void AutoFindCinemachine()
-    {
-        // Try to auto-resolve references so UI buttons work without manual assignment
-        if (freeLook == null)
-            freeLook = FindFirstObjectByType<CinemachineCamera>();
-        if (targetGroup == null)
-            targetGroup = FindFirstObjectByType<CinemachineTargetGroup>();
-        if (overviewCamera == null)
-            overviewCamera = FindFirstObjectByType<CinemachineCamera>();
-    }
-
-    void SyncTargetGroup()
-    {
-        if (targetGroup == null) return;
-        // Clear existing members and add pod transforms
-        var targets = new List<CinemachineTargetGroup.Target>(pod.Count);
-        for (int i = 0; i < pod.Count; i++)
-        {
-            targets.Add(new CinemachineTargetGroup.Target
-            {
-                Object = pod[i].transform,
-                Weight = 1f,
-                Radius = 1.5f
-            });
-        }
-        targetGroup.Targets = targets;
-    }
-
-    // ---------------- Cinemachine control ----------------
-    void Follow(OrcaAgent target)
-    {
-        if (freeLook == null || target == null) return;
-        freeLook.Follow = target.transform;
-        freeLook.LookAt = target.transform;
-        freeLook.Priority = 20;
-        if (overviewCamera != null) overviewCamera.Priority = 10;
-    }
-    void FollowByName(string roleName)
-    {
-        var t = pod.Find(o => o.name.StartsWith(roleName, StringComparison.OrdinalIgnoreCase));
-        if (t != null) Follow(t);
-    }
-    void ActivateOverviewCamera()
-    {
-        if (overviewCamera == null) return;
-        overviewCamera.Priority = 25;
-        if (freeLook != null) freeLook.Priority = 10;
-    }
-
     public void ResetKillCount() { killCount = 0; }
 
     void OnGUI()
@@ -899,20 +846,7 @@ public class OrcaController : MonoBehaviour
         GUILayout.Label("<b>Labels</b>");
         showRoleText = ToggleT("Show Role Text", "Show text labels above each orca indicating its role.", showRoleText);
 
-        GUILayout.Space(6);
-        GUILayout.Label("<b>Camera</b>");
-        GUILayout.BeginHorizontal();
-        GUI.enabled = overviewCamera != null;
-        if (GUILayout.Button("Top-Down: Target Group")) ActivateOverviewCamera();
-        GUI.enabled = true;
-        GUILayout.EndHorizontal();
-        // Per-orca buttons by name
-        foreach (var o in pod)
-        {
-            GUI.enabled = freeLook != null;
-            if (GUILayout.Button($"FreeLook Follow: {o.name}")) Follow(o);
-            GUI.enabled = true;
-        }
+        cameraController?.DrawCameraUI(pod);
 
         GUILayout.Space(6);
         GUILayout.BeginHorizontal();
@@ -1031,22 +965,22 @@ public class OrcaController : MonoBehaviour
         }
         
         // Draw tank area (red - avoid spawning here) - only when selected
-        if (tankAreaCollider)
+        if (simulationArea)
         {
             Gizmos.color = new Color(1f, 0f, 0f, 0.15f);
-            Gizmos.DrawCube(tankAreaCollider.bounds.center, tankAreaCollider.bounds.size);
+            Gizmos.DrawCube(simulationArea.bounds.center, simulationArea.bounds.size);
             
             Gizmos.color = new Color(1f, 0f, 0f, 0.7f);
-            Gizmos.DrawWireCube(tankAreaCollider.bounds.center, tankAreaCollider.bounds.size);
+            Gizmos.DrawWireCube(simulationArea.bounds.center, simulationArea.bounds.size);
         }
         
         // Draw detailed spawn area info when selected
         Vector3 centerPoint;
-        if (tankAreaCollider)
+        if (simulationArea)
         {
             // Always use spawn center if set, otherwise use simulation area center (not tank center)
             centerPoint = spawnCenter ? spawnCenter.position : simulationArea.bounds.center;
-            float tankMaxExtent = Mathf.Max(tankAreaCollider.bounds.size.x, tankAreaCollider.bounds.size.y, tankAreaCollider.bounds.size.z) * 0.5f;
+            float tankMaxExtent = Mathf.Max(simulationArea.bounds.size.x, simulationArea.bounds.size.y, simulationArea.bounds.size.z) * 0.5f;
             float minDistanceFromTank = tankMaxExtent + 1.5f;
             
             // Draw minimum safe distance (yellow) if different from spawn radius
@@ -1062,7 +996,7 @@ public class OrcaController : MonoBehaviour
     {
         // Always show spawn area (visible for orcas since they're important predators)
         Vector3 centerPoint;
-        if (tankAreaCollider)
+        if (simulationArea)
         {
             // Always use spawn center if set, otherwise use simulation area center (consistent with spawning logic)
             centerPoint = spawnCenter ? spawnCenter.position : simulationArea.bounds.center;
