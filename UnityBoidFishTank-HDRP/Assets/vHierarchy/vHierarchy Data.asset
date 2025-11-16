@@ -39,6 +39,8 @@ MonoBehaviour:
         - globalObjectIdString: GlobalObjectId_V1-2-265b46aa1045596409a6b31ba1158e4b-287447062-0
         - globalObjectIdString: GlobalObjectId_V1-2-265b46aa1045596409a6b31ba1158e4b-1604424820-0
         - globalObjectIdString: GlobalObjectId_V1-2-265b46aa1045596409a6b31ba1158e4b-348316885-0
+        - globalObjectIdString: GlobalObjectId_V1-2-265b46aa1045596409a6b31ba1158e4b-168638733-0
+        - globalObjectIdString: GlobalObjectId_V1-2-265b46aa1045596409a6b31ba1158e4b-793968645-0
         values:
         - colorIndex: 5
           iconNameOrGuid: 
@@ -122,6 +124,14 @@ MonoBehaviour:
           isColorRecursive: 0
         - colorIndex: 0
           iconNameOrGuid: WindZone Icon
+          isIconRecursive: 0
+          isColorRecursive: 0
+        - colorIndex: 8
+          iconNameOrGuid: AudioClip Icon
+          isIconRecursive: 0
+          isColorRecursive: 0
+        - colorIndex: 5
+          iconNameOrGuid: 
           isIconRecursive: 0
           isColorRecursive: 0
   bookmarks: []
