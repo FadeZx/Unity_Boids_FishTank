@@ -11,10 +11,11 @@ using UnityEngine;
 public class BoidController : MonoBehaviour
 {
     [Header("References")]
+
+    [Tooltip("Tank area collider - boids will avoid spawning inside this area but use it for movement boundaries")]
     public BoxCollider simulationArea;     // IsTrigger = true
     public BoidAgent boidPrefab;
-    [Tooltip("Tank area collider - boids will avoid spawning inside this area but use it for movement boundaries")]
-    public Collider tankAreaCollider;
+
 
     [Header("Counts")]
     public int boidCount = 100;
@@ -167,113 +168,23 @@ public class BoidController : MonoBehaviour
     {
         // Always use the centerPoint passed in (which is already spawn center or fallback)
         Vector3 spawnCenterPos = centerPoint;
-        
-        // If no tank area is defined, just spawn within radius around the spawn center
-        if (tankAreaCollider == null)
-        {
-            Vector3 randomOffset = UnityEngine.Random.insideUnitSphere * spawnRadius;
-            Vector3 pos = spawnCenterPos + randomOffset;
-            
-            // Clamp to simulation area bounds
-            pos.x = Mathf.Clamp(pos.x, area.min.x, area.max.x);
-            pos.y = Mathf.Clamp(pos.y, area.min.y, area.max.y);
-            pos.z = Mathf.Clamp(pos.z, area.min.z, area.max.z);
-            return pos;
-        }
+        Bounds bounds = simulationArea != null ? simulationArea.bounds : area;
 
-        Bounds tankBounds = tankAreaCollider.bounds;
-        Debug.Log($"BoidController: Tank bounds - Center: {tankBounds.center}, Size: {tankBounds.size}");
-        
-        // Strategy 1: Try to spawn in a ring around the spawn center at the specified radius
         for (int attempt = 0; attempt < maxSpawnAttempts; attempt++)
         {
-            // Generate position on a sphere around the spawn center
-            Vector3 randomDirection = UnityEngine.Random.onUnitSphere;
-            
-            // Calculate minimum distance to be outside tank
-            float tankMaxExtent = Mathf.Max(tankBounds.size.x, tankBounds.size.y, tankBounds.size.z) * 0.5f;
-            float minDistanceFromTank = tankMaxExtent + 1.0f; // 1 unit buffer
-            
-            // Use spawn radius (user's setting), but warn if it's too small
-            float spawnDistance = spawnRadius;
-            if (spawnRadius < minDistanceFromTank && attempt == 0)
-            {
-                Debug.LogWarning($"BoidController: Spawn radius ({spawnRadius:F1}) is smaller than safe distance ({minDistanceFromTank:F1}). Some boids may spawn inside tank.");
-            }
-            
-            Vector3 candidatePos = spawnCenterPos + randomDirection * spawnDistance;
-            
-            // Debug first spawn position
-            if (attempt == 0)
-            {
-                Debug.Log($"BoidController: First spawn attempt - Center: {spawnCenterPos}, Direction: {randomDirection}, Distance: {spawnDistance}, Result: {candidatePos}");
-            }
-            
-            // Clamp to simulation area bounds
-            candidatePos.x = Mathf.Clamp(candidatePos.x, area.min.x, area.max.x);
-            candidatePos.y = Mathf.Clamp(candidatePos.y, area.min.y, area.max.y);
-            candidatePos.z = Mathf.Clamp(candidatePos.z, area.min.z, area.max.z);
-            
-            // Verify position is outside tank area
-            if (!tankBounds.Contains(candidatePos))
-            {
-                if (attempt == 0)
-                {
-                    Debug.Log($"BoidController: Successfully spawned at {candidatePos} (distance from center: {Vector3.Distance(candidatePos, spawnCenterPos):F2})");
-                }
-                return candidatePos;
-            }
-            else if (attempt == 0)
-            {
-                Debug.Log($"BoidController: Spawn position {candidatePos} is inside tank bounds {tankBounds}, trying again...");
-            }
+            // Uniformly pick a point inside the requested spawn radius
+            Vector3 candidatePos = spawnCenterPos + UnityEngine.Random.insideUnitSphere * spawnRadius;
+
+            // Keep within the simulation bounds if we have them
+            candidatePos.x = Mathf.Clamp(candidatePos.x, bounds.min.x, bounds.max.x);
+            candidatePos.y = Mathf.Clamp(candidatePos.y, bounds.min.y, bounds.max.y);
+            candidatePos.z = Mathf.Clamp(candidatePos.z, bounds.min.z, bounds.max.z);
+
+            return candidatePos;
         }
-        
-        // Strategy 2: Try spawning in corners/edges of simulation area (away from tank)
-        Debug.LogWarning($"BoidController: Ring spawn failed after {maxSpawnAttempts} attempts, trying corner/edge spawn.");
-        
-        Vector3[] cornerOffsets = new Vector3[]
-        {
-            new Vector3(1, 1, 1),   // top-front-right
-            new Vector3(-1, 1, 1),  // top-front-left
-            new Vector3(1, 1, -1),  // top-back-right
-            new Vector3(-1, 1, -1), // top-back-left
-            new Vector3(1, -1, 1),  // bottom-front-right
-            new Vector3(-1, -1, 1), // bottom-front-left
-            new Vector3(1, -1, -1), // bottom-back-right
-            new Vector3(-1, -1, -1) // bottom-back-left
-        };
-        
-        for (int attempt = 0; attempt < cornerOffsets.Length; attempt++)
-        {
-            Vector3 cornerDir = cornerOffsets[attempt].normalized;
-            Vector3 cornerPos = area.center + Vector3.Scale(cornerDir, area.size * 0.4f);
-            
-            // Add some randomness around the corner
-            Vector3 randomOffset = UnityEngine.Random.insideUnitSphere * (spawnRadius * 0.5f);
-            Vector3 candidatePos = cornerPos + randomOffset;
-            
-            // Clamp to simulation area bounds
-            candidatePos.x = Mathf.Clamp(candidatePos.x, area.min.x, area.max.x);
-            candidatePos.y = Mathf.Clamp(candidatePos.y, area.min.y, area.max.y);
-            candidatePos.z = Mathf.Clamp(candidatePos.z, area.min.z, area.max.z);
-            
-            if (!tankBounds.Contains(candidatePos))
-            {
-                return candidatePos;
-            }
-        }
-        
-        // Last resort: spawn at simulation area edge, far from tank
-        Debug.LogWarning($"BoidController: Using last resort spawn position at simulation area edge.");
-        Vector3 tankToAreaCenter = (area.center - tankBounds.center).normalized;
-        Vector3 edgePos = area.center + Vector3.Scale(tankToAreaCenter, area.size * 0.45f);
-        
-        return new Vector3(
-            Mathf.Clamp(edgePos.x, area.min.x, area.max.x),
-            Mathf.Clamp(edgePos.y, area.min.y, area.max.y),
-            Mathf.Clamp(edgePos.z, area.min.z, area.max.z)
-        );
+
+        // Fallback: use center if something goes wrong
+        return spawnCenterPos;
     }
 
     void Respawn()
@@ -730,22 +641,22 @@ public class BoidController : MonoBehaviour
         }
         
         // Draw tank area (red - avoid spawning here) - only when selected
-        if (tankAreaCollider)
+        if (simulationArea)
         {
             Gizmos.color = new Color(1f, 0f, 0f, 0.15f);
-            Gizmos.DrawCube(tankAreaCollider.bounds.center, tankAreaCollider.bounds.size);
+            Gizmos.DrawCube(simulationArea.bounds.center, simulationArea.bounds.size);
             
             Gizmos.color = new Color(1f, 0f, 0f, 0.7f);
-            Gizmos.DrawWireCube(tankAreaCollider.bounds.center, tankAreaCollider.bounds.size);
+            Gizmos.DrawWireCube(simulationArea.bounds.center, simulationArea.bounds.size);
         }
         
         // Draw detailed spawn area info when selected
         Vector3 centerPoint;
-        if (tankAreaCollider)
+        if (simulationArea)
         {
             // Always use spawn center if set, otherwise use simulation area center (not tank center)
             centerPoint = spawnCenter ? spawnCenter.position : simulationArea.bounds.center;
-            float tankMaxExtent = Mathf.Max(tankAreaCollider.bounds.size.x, tankAreaCollider.bounds.size.y, tankAreaCollider.bounds.size.z) * 0.5f;
+            float tankMaxExtent = Mathf.Max(simulationArea.bounds.size.x, simulationArea.bounds.size.y, simulationArea.bounds.size.z) * 0.5f;
             float minDistanceFromTank = tankMaxExtent + 1.0f;
             
             // Draw minimum safe distance (yellow) if different from spawn radius
@@ -761,10 +672,10 @@ public class BoidController : MonoBehaviour
     {
         // Always show spawn area (not just when debug is enabled) for better visibility
         Vector3 centerPoint;
-        if (tankAreaCollider)
+        if (simulationArea)
         {
             // Use spawn center if set, otherwise use tank center
-            centerPoint = spawnCenter ? spawnCenter.position : tankAreaCollider.bounds.center;
+            centerPoint = spawnCenter ? spawnCenter.position : simulationArea.bounds.center;
         }
         else
         {

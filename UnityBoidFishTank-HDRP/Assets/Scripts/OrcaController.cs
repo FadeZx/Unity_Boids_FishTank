@@ -208,98 +208,23 @@ public class OrcaController : MonoBehaviour
     {
         // Always use the centerPoint passed in (which is already spawn center or fallback)
         Vector3 spawnCenterPos = centerPoint;
-        
-        // If no tank area is defined, just spawn within radius around the spawn center
-        if (simulationArea == null)
-        {
-            Vector3 randomOffset = UnityEngine.Random.insideUnitSphere * spawnRadius;
-            Vector3 pos = spawnCenterPos + randomOffset;
-            
-            // Clamp to simulation area bounds
-            pos.x = Mathf.Clamp(pos.x, area.min.x, area.max.x);
-            pos.y = Mathf.Clamp(pos.y, area.min.y, area.max.y);
-            pos.z = Mathf.Clamp(pos.z, area.min.z, area.max.z);
-            return pos;
-        }
+        Bounds bounds = simulationArea != null ? simulationArea.bounds : area;
 
-        Bounds tankBounds = simulationArea.bounds;
-        
-        // Strategy 1: Try to spawn in a ring around the spawn center at the specified radius
         for (int attempt = 0; attempt < maxSpawnAttempts; attempt++)
         {
-            // Generate position on a sphere around the spawn center
-            Vector3 randomDirection = UnityEngine.Random.onUnitSphere;
-            
-            // Calculate minimum distance to be outside tank
-            float tankMaxExtent = Mathf.Max(tankBounds.size.x, tankBounds.size.y, tankBounds.size.z) * 0.5f;
-            float minDistanceFromTank = tankMaxExtent + 1.5f; // 1.5 unit buffer for orcas
-            
-            // Use spawn radius (user's setting), but warn if it's too small
-            float spawnDistance = spawnRadius;
-            if (spawnRadius < minDistanceFromTank && attempt == 0)
-            {
-                Debug.LogWarning($"OrcaController: Spawn radius ({spawnRadius:F1}) is smaller than safe distance ({minDistanceFromTank:F1}). Some orcas may spawn inside tank.");
-            }
-            
-            Vector3 candidatePos = spawnCenterPos + randomDirection * spawnDistance;
-            
-            // Clamp to simulation area bounds
-            candidatePos.x = Mathf.Clamp(candidatePos.x, area.min.x, area.max.x);
-            candidatePos.y = Mathf.Clamp(candidatePos.y, area.min.y, area.max.y);
-            candidatePos.z = Mathf.Clamp(candidatePos.z, area.min.z, area.max.z);
-            
-            // Verify position is outside tank area
-            if (!tankBounds.Contains(candidatePos))
-            {
-                return candidatePos;
-            }
+            // Uniformly pick a point inside the requested spawn radius
+            Vector3 candidatePos = spawnCenterPos + UnityEngine.Random.insideUnitSphere * spawnRadius;
+
+            // Keep within the simulation bounds if we have them
+            candidatePos.x = Mathf.Clamp(candidatePos.x, bounds.min.x, bounds.max.x);
+            candidatePos.y = Mathf.Clamp(candidatePos.y, bounds.min.y, bounds.max.y);
+            candidatePos.z = Mathf.Clamp(candidatePos.z, bounds.min.z, bounds.max.z);
+
+            return candidatePos;
         }
-        
-        // Strategy 2: Try spawning in corners/edges of simulation area (away from tank)
-        Debug.LogWarning($"OrcaController: Ring spawn failed, trying corner/edge spawn.");
-        
-        Vector3[] cornerOffsets = new Vector3[]
-        {
-            new Vector3(1, 1, 1),   // top-front-right
-            new Vector3(-1, 1, 1),  // top-front-left
-            new Vector3(1, 1, -1),  // top-back-right
-            new Vector3(-1, 1, -1), // top-back-left
-            new Vector3(1, -1, 1),  // bottom-front-right
-            new Vector3(-1, -1, 1), // bottom-front-left
-            new Vector3(1, -1, -1), // bottom-back-right
-            new Vector3(-1, -1, -1) // bottom-back-left
-        };
-        
-        for (int attempt = 0; attempt < cornerOffsets.Length; attempt++)
-        {
-            Vector3 cornerDir = cornerOffsets[attempt].normalized;
-            Vector3 cornerPos = area.center + Vector3.Scale(cornerDir, area.size * 0.4f);
-            
-            // Add some randomness around the corner
-            Vector3 randomOffset = UnityEngine.Random.insideUnitSphere * (spawnRadius * 0.5f);
-            Vector3 candidatePos = cornerPos + randomOffset;
-            
-            // Clamp to simulation area bounds
-            candidatePos.x = Mathf.Clamp(candidatePos.x, area.min.x, area.max.x);
-            candidatePos.y = Mathf.Clamp(candidatePos.y, area.min.y, area.max.y);
-            candidatePos.z = Mathf.Clamp(candidatePos.z, area.min.z, area.max.z);
-            
-            if (!tankBounds.Contains(candidatePos))
-            {
-                return candidatePos;
-            }
-        }
-        
-        // Last resort: spawn at simulation area edge, far from tank
-        Debug.LogWarning($"OrcaController: Using last resort spawn position at simulation area edge.");
-        Vector3 tankToAreaCenter = (area.center - tankBounds.center).normalized;
-        Vector3 edgePos = area.center + Vector3.Scale(tankToAreaCenter, area.size * 0.45f);
-        
-        return new Vector3(
-            Mathf.Clamp(edgePos.x, area.min.x, area.max.x),
-            Mathf.Clamp(edgePos.y, area.min.y, area.max.y),
-            Mathf.Clamp(edgePos.z, area.min.z, area.max.z)
-        );
+
+        // Fallback: use center if something goes wrong
+        return spawnCenterPos;
     }
 
     public void Clear()

@@ -18,6 +18,7 @@ MonoBehaviour:
     - ca6ebb3980361a24cb8bf3e968f0e787
     - 3e862d84cce9b1347bd6adeb1c35a062
     - 0150e149ea3b6e848a7c1b8ec00909f2
+    - 43816f7da5b85f74db702c642e16c964
     values:
     - iconNameOrGuid: 
       colorIndex: 6
@@ -33,6 +34,10 @@ MonoBehaviour:
       isColorRecursive: 0
     - iconNameOrGuid: Terrain Icon
       colorIndex: 5
+      isIconRecursive: 0
+      isColorRecursive: 0
+    - iconNameOrGuid: tree_icon_frond
+      colorIndex: 0
       isIconRecursive: 0
       isColorRecursive: 0
   bookmarks:
