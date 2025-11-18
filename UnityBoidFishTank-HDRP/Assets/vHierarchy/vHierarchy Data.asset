@@ -45,11 +45,11 @@ MonoBehaviour:
         - globalObjectIdString: GlobalObjectId_V1-2-265b46aa1045596409a6b31ba1158e4b-1366979728-0
         values:
         - colorIndex: 5
-          iconNameOrGuid: 
+          iconNameOrGuid: Terrain Icon
           isIconRecursive: 0
           isColorRecursive: 0
         - colorIndex: 7
-          iconNameOrGuid: 
+          iconNameOrGuid: Terrain Icon
           isIconRecursive: 0
           isColorRecursive: 0
         - colorIndex: 5

@@ -251,11 +251,20 @@ public class OrcaController : MonoBehaviour
             if (o == self) continue;
             Vector3 to = o.Position - pos;
             float d2 = to.sqrMagnitude;
-            if (d2 > nr2) continue;
-            n++;
-            if (d2 < sr2) sep -= to.normalized / Mathf.Max(0.001f, Mathf.Sqrt(d2));
-            ali += o.Velocity;
-            coh += o.Position;
+
+            bool withinNeighbor = d2 <= nr2;
+            bool withinSeparation = d2 <= sr2;
+            if (!withinNeighbor && !withinSeparation) continue;
+
+            if (withinSeparation)
+                sep -= to.normalized / Mathf.Max(0.001f, Mathf.Sqrt(d2));
+
+            if (withinNeighbor)
+            {
+                n++;
+                ali += o.Velocity;
+                coh += o.Position;
+            }
         }
         if (n > 0)
         {
@@ -734,7 +743,8 @@ public class OrcaController : MonoBehaviour
         GUILayout.Space(6);
         GUILayout.Label("<b>Pod Rules</b>");
         neighborRadius = SliderT("Neighbor Radius", "How far pod-mates influence alignment/cohesion.", neighborRadius, 0.1f, 10f);
-        separationRadius = SliderT("Separation Radius", "Distance where strong separation kicks in.", separationRadius, 0.05f, neighborRadius);
+        // Lift cap: allow separation radius beyond neighbor radius
+        separationRadius = SliderT("Separation Radius", "Distance where strong separation kicks in.", separationRadius, 0.05f, 20f);
         wSeparation = SliderT("W Separation", "Weight of separation (spread apart).", wSeparation, 0f, 10f);
         wAlignment = SliderT("W Alignment", "Weight of alignment (match headings).", wAlignment, 0f, 10f);
         wCohesion = SliderT("W Cohesion", "Weight of cohesion (stay together).", wCohesion, 0f, 10f);
@@ -754,7 +764,7 @@ public class OrcaController : MonoBehaviour
         GUILayout.Label("<b>Obstacles</b>");
         avoidDistance = SliderT("Avoid Dist", "Forward probe length for obstacle detection.", avoidDistance, 0.2f, 15f);
         avoidProbeAngle = SliderT("Avoid Angle", "Side probe spread to feel around obstacles.", avoidProbeAngle, 0f, 85f);
-        orcaRadius = SliderT("Orca Radius", "Radius used for sweeps and spherecasts.", orcaRadius, 0.05f, 0.6f);
+        orcaRadius = SliderT("Orca Radius", "Radius used for sweeps and spherecasts.", orcaRadius, 0.05f, 3f);
 
         GUILayout.Space(6);
         GUILayout.Label("<b>Hunt Stats</b>");
@@ -789,12 +799,11 @@ public class OrcaController : MonoBehaviour
 
         GUILayout.EndScrollView();
 
-        // Hover tooltip display (always render container to keep layout consistent)
+        // Hover tooltip display: plain text only (no box backgrounds)
         string tip = GUI.tooltip;
-        var tipStyle = new GUIStyle(GUI.skin.box) { wordWrap = true, fontSize = 11 };
-        GUILayout.BeginVertical(GUI.skin.box);
+        var tipStyle = new GUIStyle(GUI.skin.label) { wordWrap = true, fontSize = 11 };
+        GUILayout.Space(4);
         GUILayout.Label(string.IsNullOrEmpty(tip) ? " " : tip, tipStyle, GUILayout.ExpandWidth(true));
-        GUILayout.EndVertical();
 
         GUILayout.EndArea();
     }

@@ -83,6 +83,7 @@ MonoBehaviour:
     customIcons:
     - SceneViewCamera On
     - WindZone Icon
+    - StateMachineEditor.StateSelected
     enabled: 1
   - builtinIcons: []
     customIcons:
