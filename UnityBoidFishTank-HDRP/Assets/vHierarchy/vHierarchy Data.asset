@@ -15,6 +15,8 @@ MonoBehaviour:
   sceneDatas_byGuid:
     keys:
     - 265b46aa1045596409a6b31ba1158e4b
+    - 27c6ddcf794e425438b77dcb166f218f
+    - 5ce016c137c2a5f45af9f9cd54bb54e9
     values:
     - goDatas_byGlobalId:
         keys:
@@ -95,6 +97,267 @@ MonoBehaviour:
         - colorIndex: 0
           iconNameOrGuid: SceneViewCamera On
           isIconRecursive: 1
+          isColorRecursive: 0
+        - colorIndex: 0
+          iconNameOrGuid: SceneViewCamera On
+          isIconRecursive: 0
+          isColorRecursive: 0
+        - colorIndex: 0
+          iconNameOrGuid: Light Icon
+          isIconRecursive: 0
+          isColorRecursive: 0
+        - colorIndex: 6
+          iconNameOrGuid: BoxCollider Icon
+          isIconRecursive: 0
+          isColorRecursive: 0
+        - colorIndex: 0
+          iconNameOrGuid: SceneViewCamera On
+          isIconRecursive: 0
+          isColorRecursive: 0
+        - colorIndex: 0
+          iconNameOrGuid: SceneViewCamera On
+          isIconRecursive: 0
+          isColorRecursive: 0
+        - colorIndex: 1
+          iconNameOrGuid: 
+          isIconRecursive: 0
+          isColorRecursive: 0
+        - colorIndex: 9
+          iconNameOrGuid: 
+          isIconRecursive: 0
+          isColorRecursive: 0
+        - colorIndex: 0
+          iconNameOrGuid: WindZone Icon
+          isIconRecursive: 0
+          isColorRecursive: 0
+        - colorIndex: 8
+          iconNameOrGuid: AudioClip Icon
+          isIconRecursive: 0
+          isColorRecursive: 0
+        - colorIndex: 5
+          iconNameOrGuid: 
+          isIconRecursive: 0
+          isColorRecursive: 0
+        - colorIndex: 6
+          iconNameOrGuid: 
+          isIconRecursive: 0
+          isColorRecursive: 0
+        - colorIndex: 0
+          iconNameOrGuid: SceneViewCamera On
+          isIconRecursive: 0
+          isColorRecursive: 0
+    - goDatas_byGlobalId:
+        keys:
+        - globalObjectIdString: GlobalObjectId_V1-2-27c6ddcf794e425438b77dcb166f218f-1320613406-0
+        - globalObjectIdString: GlobalObjectId_V1-2-27c6ddcf794e425438b77dcb166f218f-1500318794-0
+        - globalObjectIdString: GlobalObjectId_V1-2-27c6ddcf794e425438b77dcb166f218f-174183052-0
+        - globalObjectIdString: GlobalObjectId_V1-2-27c6ddcf794e425438b77dcb166f218f-1536321420-0
+        - globalObjectIdString: GlobalObjectId_V1-2-27c6ddcf794e425438b77dcb166f218f-1348547393-0
+        - globalObjectIdString: GlobalObjectId_V1-2-27c6ddcf794e425438b77dcb166f218f-5620585382517006499-0
+        - globalObjectIdString: GlobalObjectId_V1-2-27c6ddcf794e425438b77dcb166f218f-1597614135-0
+        - globalObjectIdString: GlobalObjectId_V1-2-27c6ddcf794e425438b77dcb166f218f-1382442554003631945-0
+        - globalObjectIdString: GlobalObjectId_V1-2-27c6ddcf794e425438b77dcb166f218f-524594080-0
+        - globalObjectIdString: GlobalObjectId_V1-2-27c6ddcf794e425438b77dcb166f218f-898133960-0
+        - globalObjectIdString: GlobalObjectId_V1-2-27c6ddcf794e425438b77dcb166f218f-50660685-0
+        - globalObjectIdString: GlobalObjectId_V1-2-27c6ddcf794e425438b77dcb166f218f-1088245939-0
+        - globalObjectIdString: GlobalObjectId_V1-2-27c6ddcf794e425438b77dcb166f218f-224350840-0
+        - globalObjectIdString: GlobalObjectId_V1-2-27c6ddcf794e425438b77dcb166f218f-111046435-0
+        - globalObjectIdString: GlobalObjectId_V1-2-27c6ddcf794e425438b77dcb166f218f-470941960-0
+        - globalObjectIdString: GlobalObjectId_V1-2-27c6ddcf794e425438b77dcb166f218f-150923638-0
+        - globalObjectIdString: GlobalObjectId_V1-2-27c6ddcf794e425438b77dcb166f218f-1633987464-0
+        - globalObjectIdString: GlobalObjectId_V1-2-27c6ddcf794e425438b77dcb166f218f-116687063-0
+        - globalObjectIdString: GlobalObjectId_V1-2-27c6ddcf794e425438b77dcb166f218f-287447062-0
+        - globalObjectIdString: GlobalObjectId_V1-2-27c6ddcf794e425438b77dcb166f218f-1604424820-0
+        - globalObjectIdString: GlobalObjectId_V1-2-27c6ddcf794e425438b77dcb166f218f-348316885-0
+        - globalObjectIdString: GlobalObjectId_V1-2-27c6ddcf794e425438b77dcb166f218f-168638733-0
+        - globalObjectIdString: GlobalObjectId_V1-2-27c6ddcf794e425438b77dcb166f218f-793968645-0
+        - globalObjectIdString: GlobalObjectId_V1-2-27c6ddcf794e425438b77dcb166f218f-1013991374-0
+        - globalObjectIdString: GlobalObjectId_V1-2-27c6ddcf794e425438b77dcb166f218f-1366979728-0
+        - globalObjectIdString: GlobalObjectId_V1-2-27c6ddcf794e425438b77dcb166f218f-1073835486-0
+        values:
+        - colorIndex: 5
+          iconNameOrGuid: Terrain Icon
+          isIconRecursive: 0
+          isColorRecursive: 0
+        - colorIndex: 7
+          iconNameOrGuid: Terrain Icon
+          isIconRecursive: 0
+          isColorRecursive: 0
+        - colorIndex: 5
+          iconNameOrGuid: 
+          isIconRecursive: 0
+          isColorRecursive: 0
+        - colorIndex: 5
+          iconNameOrGuid: 
+          isIconRecursive: 0
+          isColorRecursive: 0
+        - colorIndex: 5
+          iconNameOrGuid: 
+          isIconRecursive: 0
+          isColorRecursive: 0
+        - colorIndex: 5
+          iconNameOrGuid: 
+          isIconRecursive: 0
+          isColorRecursive: 0
+        - colorIndex: 5
+          iconNameOrGuid: 
+          isIconRecursive: 0
+          isColorRecursive: 0
+        - colorIndex: 5
+          iconNameOrGuid: 
+          isIconRecursive: 0
+          isColorRecursive: 0
+        - colorIndex: 5
+          iconNameOrGuid: 
+          isIconRecursive: 0
+          isColorRecursive: 0
+        - colorIndex: 5
+          iconNameOrGuid: 
+          isIconRecursive: 0
+          isColorRecursive: 0
+        - colorIndex: 0
+          iconNameOrGuid: SceneViewCamera On
+          isIconRecursive: 0
+          isColorRecursive: 0
+        - colorIndex: 0
+          iconNameOrGuid: SceneViewCamera On
+          isIconRecursive: 0
+          isColorRecursive: 0
+        - colorIndex: 0
+          iconNameOrGuid: SceneViewCamera On
+          isIconRecursive: 0
+          isColorRecursive: 0
+        - colorIndex: 0
+          iconNameOrGuid: SceneViewCamera On
+          isIconRecursive: 0
+          isColorRecursive: 0
+        - colorIndex: 0
+          iconNameOrGuid: Light Icon
+          isIconRecursive: 0
+          isColorRecursive: 0
+        - colorIndex: 6
+          iconNameOrGuid: BoxCollider Icon
+          isIconRecursive: 0
+          isColorRecursive: 0
+        - colorIndex: 0
+          iconNameOrGuid: SceneViewCamera On
+          isIconRecursive: 0
+          isColorRecursive: 0
+        - colorIndex: 0
+          iconNameOrGuid: SceneViewCamera On
+          isIconRecursive: 0
+          isColorRecursive: 0
+        - colorIndex: 1
+          iconNameOrGuid: 
+          isIconRecursive: 0
+          isColorRecursive: 0
+        - colorIndex: 9
+          iconNameOrGuid: 
+          isIconRecursive: 0
+          isColorRecursive: 0
+        - colorIndex: 0
+          iconNameOrGuid: WindZone Icon
+          isIconRecursive: 0
+          isColorRecursive: 0
+        - colorIndex: 8
+          iconNameOrGuid: AudioClip Icon
+          isIconRecursive: 0
+          isColorRecursive: 0
+        - colorIndex: 5
+          iconNameOrGuid: 
+          isIconRecursive: 0
+          isColorRecursive: 0
+        - colorIndex: 6
+          iconNameOrGuid: 
+          isIconRecursive: 0
+          isColorRecursive: 0
+        - colorIndex: 0
+          iconNameOrGuid: SceneViewCamera On
+          isIconRecursive: 0
+          isColorRecursive: 0
+        - colorIndex: 5
+          iconNameOrGuid: 
+          isIconRecursive: 0
+          isColorRecursive: 0
+    - goDatas_byGlobalId:
+        keys:
+        - globalObjectIdString: GlobalObjectId_V1-2-5ce016c137c2a5f45af9f9cd54bb54e9-1320613406-0
+        - globalObjectIdString: GlobalObjectId_V1-2-5ce016c137c2a5f45af9f9cd54bb54e9-1500318794-0
+        - globalObjectIdString: GlobalObjectId_V1-2-5ce016c137c2a5f45af9f9cd54bb54e9-174183052-0
+        - globalObjectIdString: GlobalObjectId_V1-2-5ce016c137c2a5f45af9f9cd54bb54e9-1536321420-0
+        - globalObjectIdString: GlobalObjectId_V1-2-5ce016c137c2a5f45af9f9cd54bb54e9-1348547393-0
+        - globalObjectIdString: GlobalObjectId_V1-2-5ce016c137c2a5f45af9f9cd54bb54e9-5620585382517006499-0
+        - globalObjectIdString: GlobalObjectId_V1-2-5ce016c137c2a5f45af9f9cd54bb54e9-1597614135-0
+        - globalObjectIdString: GlobalObjectId_V1-2-5ce016c137c2a5f45af9f9cd54bb54e9-1382442554003631945-0
+        - globalObjectIdString: GlobalObjectId_V1-2-5ce016c137c2a5f45af9f9cd54bb54e9-524594080-0
+        - globalObjectIdString: GlobalObjectId_V1-2-5ce016c137c2a5f45af9f9cd54bb54e9-898133960-0
+        - globalObjectIdString: GlobalObjectId_V1-2-5ce016c137c2a5f45af9f9cd54bb54e9-50660685-0
+        - globalObjectIdString: GlobalObjectId_V1-2-5ce016c137c2a5f45af9f9cd54bb54e9-1088245939-0
+        - globalObjectIdString: GlobalObjectId_V1-2-5ce016c137c2a5f45af9f9cd54bb54e9-224350840-0
+        - globalObjectIdString: GlobalObjectId_V1-2-5ce016c137c2a5f45af9f9cd54bb54e9-111046435-0
+        - globalObjectIdString: GlobalObjectId_V1-2-5ce016c137c2a5f45af9f9cd54bb54e9-470941960-0
+        - globalObjectIdString: GlobalObjectId_V1-2-5ce016c137c2a5f45af9f9cd54bb54e9-150923638-0
+        - globalObjectIdString: GlobalObjectId_V1-2-5ce016c137c2a5f45af9f9cd54bb54e9-1633987464-0
+        - globalObjectIdString: GlobalObjectId_V1-2-5ce016c137c2a5f45af9f9cd54bb54e9-116687063-0
+        - globalObjectIdString: GlobalObjectId_V1-2-5ce016c137c2a5f45af9f9cd54bb54e9-287447062-0
+        - globalObjectIdString: GlobalObjectId_V1-2-5ce016c137c2a5f45af9f9cd54bb54e9-1604424820-0
+        - globalObjectIdString: GlobalObjectId_V1-2-5ce016c137c2a5f45af9f9cd54bb54e9-348316885-0
+        - globalObjectIdString: GlobalObjectId_V1-2-5ce016c137c2a5f45af9f9cd54bb54e9-168638733-0
+        - globalObjectIdString: GlobalObjectId_V1-2-5ce016c137c2a5f45af9f9cd54bb54e9-793968645-0
+        - globalObjectIdString: GlobalObjectId_V1-2-5ce016c137c2a5f45af9f9cd54bb54e9-1013991374-0
+        - globalObjectIdString: GlobalObjectId_V1-2-5ce016c137c2a5f45af9f9cd54bb54e9-1366979728-0
+        values:
+        - colorIndex: 5
+          iconNameOrGuid: Terrain Icon
+          isIconRecursive: 0
+          isColorRecursive: 0
+        - colorIndex: 7
+          iconNameOrGuid: Terrain Icon
+          isIconRecursive: 0
+          isColorRecursive: 0
+        - colorIndex: 5
+          iconNameOrGuid: 
+          isIconRecursive: 0
+          isColorRecursive: 0
+        - colorIndex: 5
+          iconNameOrGuid: 
+          isIconRecursive: 0
+          isColorRecursive: 0
+        - colorIndex: 5
+          iconNameOrGuid: 
+          isIconRecursive: 0
+          isColorRecursive: 0
+        - colorIndex: 5
+          iconNameOrGuid: 
+          isIconRecursive: 0
+          isColorRecursive: 0
+        - colorIndex: 5
+          iconNameOrGuid: 
+          isIconRecursive: 0
+          isColorRecursive: 0
+        - colorIndex: 5
+          iconNameOrGuid: 
+          isIconRecursive: 0
+          isColorRecursive: 0
+        - colorIndex: 5
+          iconNameOrGuid: 
+          isIconRecursive: 0
+          isColorRecursive: 0
+        - colorIndex: 5
+          iconNameOrGuid: 
+          isIconRecursive: 0
+          isColorRecursive: 0
+        - colorIndex: 0
+          iconNameOrGuid: SceneViewCamera On
+          isIconRecursive: 0
+          isColorRecursive: 0
+        - colorIndex: 0
+          iconNameOrGuid: SceneViewCamera On
+          isIconRecursive: 0
+          isColorRecursive: 0
+        - colorIndex: 0
+          iconNameOrGuid: SceneViewCamera On
+          isIconRecursive: 0
           isColorRecursive: 0
         - colorIndex: 0
           iconNameOrGuid: SceneViewCamera On

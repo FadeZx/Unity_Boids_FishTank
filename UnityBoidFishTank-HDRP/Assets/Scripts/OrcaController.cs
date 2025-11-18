@@ -69,6 +69,8 @@ public class OrcaController : MonoBehaviour
     [Header("Obstacle & Boundary Avoidance")]
     public LayerMask obstacleMask;
     public float avoidDistance = 2.5f;
+    [Tooltip("Optional max cap for obstacle probe length (0 = uncapped).")]
+    public float avoidDistanceCap = 0f;
     public float avoidProbeAngle = 25f;
     public float orcaRadius = 0.25f;
     [Tooltip("Distance from walls where orcas start steering away (soft boundary).")]
@@ -107,7 +109,10 @@ public class OrcaController : MonoBehaviour
     Vector3 preyCentroid, preyAvgVel;
 
     // UI
-    bool showUI = true; // F2
+    bool showUI = true; // always draw handle; F2 collapses/expands panel
+    bool showPanel = true; // collapse/expand similar to audio UI
+    float panelAnim = 1f; // 0 collapsed -> 1 expanded
+    float panelAnimVel = 0f;
     Vector2 scroll;
     const string kPrefs = "Orca_Settings_JSON";
     string JsonPath => Path.Combine(Application.persistentDataPath, "orca_settings.json");
@@ -133,7 +138,8 @@ public class OrcaController : MonoBehaviour
 
     void Update()
     {
-        if (KeyDown_F2()) showUI = !showUI;
+        // Toggle panel collapse/expand with F2
+        if (KeyDown_F2()) showPanel = !showPanel;
 
         // compute prey centroid/avg vel once per frame
         GetPreyStats(out preyCentroid, out preyAvgVel);
@@ -372,6 +378,7 @@ public class OrcaController : MonoBehaviour
                 {
                     Vector3 dash = (intercept - pos).normalized * (maxSpeed * strikeBoost);
                     f += wPursuit * (dash - vel); // quick acceleration toward dash dir
+                    self.NotifyStrikeBoost();
                     self.ResetStrikeCooldown();
                 }
                 else
@@ -423,6 +430,8 @@ public class OrcaController : MonoBehaviour
     {
         if (vel.sqrMagnitude < 1e-8f) return Vector3.zero;
         float probe = avoidDistance;
+        if (avoidDistanceCap > 0f)
+            probe = Mathf.Min(probe, avoidDistanceCap);
         Vector3 fwd = vel.normalized;
 
         Vector3[] dirs = new Vector3[]
@@ -613,7 +622,7 @@ public class OrcaController : MonoBehaviour
         public float wPursuit, wEncircle, wCorral;
         public float encircleRadius, flankOffsetAngle;
         public float strikeRange, strikeBoost, strikeCooldown;
-        public float avoidDistance, avoidProbeAngle, orcaRadius;
+        public float avoidDistance, avoidDistanceCap, avoidProbeAngle, orcaRadius;
         public float wDepth, depthCenterBias, depthFollowPrey;
         public bool drawDebug;
         public bool showRoleText;
@@ -645,6 +654,7 @@ public class OrcaController : MonoBehaviour
         strikeBoost = strikeBoost,
         strikeCooldown = strikeCooldown,
         avoidDistance = avoidDistance,
+        avoidDistanceCap = avoidDistanceCap,
         avoidProbeAngle = avoidProbeAngle,
         orcaRadius = orcaRadius,
         wDepth = wDepth,
@@ -668,7 +678,7 @@ public class OrcaController : MonoBehaviour
         wPursuit = s.wPursuit; wEncircle = s.wEncircle; wCorral = s.wCorral;
         encircleRadius = s.encircleRadius; flankOffsetAngle = s.flankOffsetAngle;
         strikeRange = s.strikeRange; strikeBoost = s.strikeBoost; strikeCooldown = s.strikeCooldown;
-        avoidDistance = s.avoidDistance; avoidProbeAngle = s.avoidProbeAngle; orcaRadius = s.orcaRadius;
+        avoidDistance = s.avoidDistance; avoidDistanceCap = s.avoidDistanceCap; avoidProbeAngle = s.avoidProbeAngle; orcaRadius = s.orcaRadius;
         wDepth = s.wDepth; depthCenterBias = s.depthCenterBias; depthFollowPrey = s.depthFollowPrey;
         showRoleText = s.showRoleText;
         killCount = s.killCount;
@@ -714,10 +724,31 @@ public class OrcaController : MonoBehaviour
 
     void OnGUI()
     {
-        if (!showUI) return;
-        const int w = 340;
-        Rect r = new Rect(Screen.width - w - 12, 12, w, Screen.height - 24);
+        const float w = 340f;
+        const float handleH = 22f;
+        const float margin = 12f;
+
+        float targetAnim = showPanel ? 1f : 0f;
+        panelAnim = Mathf.SmoothDamp(panelAnim, targetAnim, ref panelAnimVel, 0.15f, Mathf.Infinity, Time.deltaTime);
+
+        float x = Screen.width - w - margin;
+        float y = margin;
+        float collapsedH = handleH + 4f;
+        float expandedH = Screen.height - margin * 2f;
+        float h = Mathf.Lerp(collapsedH, expandedH, Mathf.Clamp01(panelAnim));
+
+        Rect r = new Rect(x, y, w, h);
         GUILayout.BeginArea(r, GUI.skin.box);
+
+        if (GUILayout.Button(showPanel ? "Orcas(F2) ▲" : "Orcas(F2) ▼", GUILayout.Height(handleH)))
+            showPanel = !showPanel;
+
+        if (!showPanel)
+        {
+            GUILayout.EndArea();
+            return;
+        }
+
         GUILayout.Label("<b>Orca Pod (Predators)</b>", new GUIStyle(GUI.skin.label) { richText = true });
 
         scroll = GUILayout.BeginScrollView(scroll);
@@ -763,6 +794,7 @@ public class OrcaController : MonoBehaviour
         GUILayout.Space(6);
         GUILayout.Label("<b>Obstacles</b>");
         avoidDistance = SliderT("Avoid Dist", "Forward probe length for obstacle detection.", avoidDistance, 0.2f, 15f);
+        avoidDistanceCap = SliderT("Avoid Dist Cap", "Optional max probe length (0 = uncapped).", avoidDistanceCap, 0f, 30f);
         avoidProbeAngle = SliderT("Avoid Angle", "Side probe spread to feel around obstacles.", avoidProbeAngle, 0f, 85f);
         orcaRadius = SliderT("Orca Radius", "Radius used for sweeps and spherecasts.", orcaRadius, 0.05f, 3f);
 

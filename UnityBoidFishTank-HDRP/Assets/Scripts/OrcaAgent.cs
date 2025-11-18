@@ -44,7 +44,21 @@ public class OrcaAgent : MonoBehaviour
     [Tooltip("Assign the Orca head trigger collider (set as IsTrigger). Collisions with this collider will kill prey.")]
     public Collider headTrigger;
 
+    [Header("Animation")]
+    [Tooltip("Animator driving SwimFast (bool), Eat (bool), and Attack (trigger) parameters.")]
+    public Animator animator;
+    [Tooltip("Time to keep SwimFast enabled after a strike boost starts.")]
+    public float strikeBoostAnimDuration = 0.8f;
+    [Tooltip("Seconds spent eating after a kill; also used as cooldown before the next eat.")]
+    public float eatDuration = 2.0f;
+
+    static readonly int animSwimFast = Animator.StringToHash("FastSwim");
+    static readonly int animEat = Animator.StringToHash("Eating");
+    static readonly int animAttack = Animator.StringToHash("Attack");
+
     float strikeCooldownTimer = 0f;
+    float strikeBoostTimer = 0f;
+    float eatTimer = 0f;
 
     void Awake()
     {
@@ -72,8 +86,9 @@ public class OrcaAgent : MonoBehaviour
 
     void Update()
     {
-        if (!controller) return;
         float dt = Time.deltaTime;
+        UpdateActionTimers(dt);
+        if (!controller) return;
         if (strikeCooldownTimer > 0f)
             strikeCooldownTimer -= dt;
         if (targetHoldTimer > 0f)
@@ -149,6 +164,41 @@ public class OrcaAgent : MonoBehaviour
 
     public bool CanStrike() => strikeCooldownTimer <= 0f;
     public void ResetStrikeCooldown() => strikeCooldownTimer = controller.strikeCooldown;
+    bool IsEating() => eatTimer > 0f;
+
+    public void NotifyStrikeBoost()
+    {
+        strikeBoostTimer = strikeBoostAnimDuration;
+        if (animator != null)
+            animator.SetBool(animSwimFast, true);
+    }
+
+    void BeginEatState()
+    {
+        eatTimer = eatDuration;
+        if (animator != null)
+        {
+            animator.SetBool(animEat, true);
+            animator.SetTrigger(animAttack);
+        }
+    }
+
+    void UpdateActionTimers(float dt)
+    {
+        if (strikeBoostTimer > 0f)
+        {
+            strikeBoostTimer -= dt;
+            if (strikeBoostTimer <= 0f && animator != null)
+                animator.SetBool(animSwimFast, false);
+        }
+
+        if (eatTimer > 0f)
+        {
+            eatTimer -= dt;
+            if (eatTimer <= 0f && animator != null)
+                animator.SetBool(animEat, false);
+        }
+    }
 
     // Contact-based kill: requires orca head collider (Trigger) and prey colliders
     void OnTriggerEnter(Collider other)
@@ -174,10 +224,12 @@ public class OrcaAgent : MonoBehaviour
     void TryKill(Collider col)
     {
         if (controller == null || controller.preyController == null) return;
+        if (IsEating()) return; // wait for eat delay before killing again
         var prey = col.GetComponentInParent<BoidAgent>();
         if (prey == null) return;
         // Remove prey and increment kill count
         controller.preyController.RemoveAgent(prey);
         controller.killCount++;
+        BeginEatState();
     }
 }

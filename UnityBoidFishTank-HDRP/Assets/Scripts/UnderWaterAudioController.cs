@@ -98,11 +98,19 @@ public class UnderwaterAudioController : MonoBehaviour
         {
             ToggleMute();
         }
+        if (Keyboard.current != null && Keyboard.current.f3Key.wasPressedThisFrame)
+        {
+            showPanel = !showPanel;
+        }
 #else
         // Legacy Input fallback (only if enabled in Player Settings)
         if (Input.GetKeyDown(KeyCode.M))
         {
             ToggleMute();
+        }
+        if (Input.GetKeyDown(KeyCode.F3))
+        {
+            showPanel = !showPanel;
         }
 #endif
 
@@ -214,7 +222,7 @@ public class UnderwaterAudioController : MonoBehaviour
 
         // Handle bar/button to toggle panel visibility
         var handleRect = new Rect(x + (panelWidth - 120f) * 0.5f, y + panelHeight - panelHeightCollapsed, 120f, panelHeightCollapsed);
-        if (GUI.Button(handleRect, showPanel ? "Audio ^" : "Audio v"))
+        if (GUI.Button(handleRect, showPanel ? "Audio(F3) ▲" : "Audio(F3) ▼"))
         {
             showPanel = !showPanel;
         }

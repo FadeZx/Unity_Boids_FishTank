@@ -7,6 +7,7 @@ public class BoidAgent : MonoBehaviour
 
     public Vector3 Position => transform.position;
     public Vector3 Velocity { get; set; }
+    public float RuntimeMaxSpeed { get; set; }
 
     [Header("Rotation")]
     public float turnResponsiveness = 6f;
@@ -21,8 +22,9 @@ public class BoidAgent : MonoBehaviour
         var steer = controller.ComputeSteering(this, dt, out var f);
 
         Velocity += steer * dt;
-        float speed = Velocity.magnitude;
-        speed = Mathf.Clamp(speed, controller.minSpeed, controller.maxSpeed);
+        float requestedMax = RuntimeMaxSpeed > 0f ? RuntimeMaxSpeed : controller.maxSpeed;
+        float cappedMax = controller.GetCappedSpeed(requestedMax);
+        float speed = Mathf.Clamp(Velocity.magnitude, controller.minSpeed, cappedMax);
         if (speed > 0.0001f) Velocity = Velocity.normalized * speed;
         transform.position += Velocity * dt;
 

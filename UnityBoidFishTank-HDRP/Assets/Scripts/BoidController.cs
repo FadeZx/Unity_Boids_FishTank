@@ -31,6 +31,8 @@ public class BoidController : MonoBehaviour
     [Header("Speeds")]
     public float minSpeed = 1.5f;
     public float maxSpeed = 4.0f;
+    [Tooltip("Hard cap on boid speed (0 = uncapped). Applies after any panic boost.")]
+    public float maxSpeedCap = 0f;
     public float maxSteerForce = 6.0f;
 
     [Header("Neighborhood")]
@@ -57,6 +59,8 @@ public class BoidController : MonoBehaviour
     public float predatorAvoidBoost = 2.0f;
     [Tooltip("Distance within which the predator avoidance gets fully boosted.")]
     public float predatorPanicRadius = 1.2f;
+    [Tooltip("Extra speed multiplier when in panic range of an orca.")]
+    public float predatorPanicSpeedMultiplier = 1.25f;
 
     [Header("Vertical Steering")]
     [Tooltip("Scale for up/down steering vs left/right. < 1 makes vertical turning harder.")]
@@ -72,12 +76,12 @@ public class BoidController : MonoBehaviour
     public class BoidSettings
     {
         public int boidCount;
-        public float minSpeed, maxSpeed, maxSteerForce;
+        public float minSpeed, maxSpeed, maxSpeedCap, maxSteerForce;
         public float neighborRadius, separationRadius;
         public float weightSeparation, weightAlignment, weightCohesion, weightBounds, weightObstacleAvoid;
         public float avoidDistance, avoidProbeAngle;
         public float predatorAvoidRadius, weightPredatorAvoid;
-        public float predatorAvoidBoost, predatorPanicRadius;
+        public float predatorAvoidBoost, predatorPanicRadius, predatorPanicSpeedMultiplier;
         public float verticalSteerDamping;
         public bool drawDebug;
         public float spawnRadius;
@@ -87,7 +91,10 @@ public class BoidController : MonoBehaviour
     const string kPrefsKey = "Boids_Settings_JSON";
     string JsonPath => Path.Combine(Application.persistentDataPath, "boids_settings.json");
 
-    bool showUI = true;        // F1 toggle
+    bool showUI = true;        // always draw handle; F1 collapses/expands panel
+    bool showPanel = true;     // collapse/expand similar to audio UI
+    float panelAnim = 1f;      // 0 collapsed -> 1 expanded
+    float panelAnimVel = 0f;
     Vector2 scroll;            // UI scroll
     int lastSpawnCount;        // detect boidCount change for respawn
 
@@ -107,8 +114,8 @@ public class BoidController : MonoBehaviour
 
     void Update()
     {
-        // Toggle UI
-        if (KeyDown_F1()) showUI = !showUI;
+        // Toggle panel collapse/expand with F1
+        if (KeyDown_F1()) showPanel = !showPanel;
 
         // Hotkeys
         if (CtrlS_Down()) SaveToFile();
@@ -227,6 +234,7 @@ public class BoidController : MonoBehaviour
         Vector3 sep = Vector3.zero;
         Vector3 ali = Vector3.zero;
         Vector3 coh = Vector3.zero;
+        float speedLimit = maxSpeed;
         int neighborCount = 0;
 
         float nRad2 = neighborRadius * neighborRadius;
@@ -247,19 +255,12 @@ public class BoidController : MonoBehaviour
             coh += other.Position;
         }
 
-        if (neighborCount > 0)
-        {
-            ali = (ali / neighborCount).normalized * maxSpeed - vel;
-            coh = ((coh / neighborCount) - pos);
-        }
-
-        if (sep.sqrMagnitude > 0.0001f) sep = sep.normalized * maxSpeed - vel;
-
         Vector3 boundsForce = BoundsSteer(pos, vel);
         Vector3 avoid = ObstacleAvoid(pos, vel);
 
         // Predator avoidance (flee orcas) with boost when close
         Vector3 predatorAvoid = Vector3.zero;
+        bool predatorPanic = false;
         if (predatorController != null && predatorController.pod != null && predatorController.pod.Count > 0)
         {
             float r2 = predatorAvoidRadius * predatorAvoidRadius;
@@ -271,13 +272,30 @@ public class BoidController : MonoBehaviour
                 {
                     float boost = 1f;
                     if (d2 < predatorPanicRadius * predatorPanicRadius)
+                    {
                         boost = predatorAvoidBoost;
+                        predatorPanic = true;
+                    }
                     predatorAvoid -= boost * to.normalized / Mathf.Sqrt(d2);
                 }
             }
-            if (predatorAvoid.sqrMagnitude > 0.0001f)
-                predatorAvoid = predatorAvoid.normalized * maxSpeed - vel;
         }
+
+        if (predatorPanic)
+            speedLimit = maxSpeed * predatorPanicSpeedMultiplier;
+        speedLimit = GetCappedSpeed(speedLimit);
+        self.RuntimeMaxSpeed = speedLimit;
+
+        if (predatorAvoid.sqrMagnitude > 0.0001f)
+            predatorAvoid = predatorAvoid.normalized * speedLimit - vel;
+
+        if (neighborCount > 0)
+        {
+            ali = (ali / neighborCount).normalized * speedLimit - vel;
+            coh = ((coh / neighborCount) - pos);
+        }
+
+        if (sep.sqrMagnitude > 0.0001f) sep = sep.normalized * speedLimit - vel;
 
         // Combine forces
         Vector3 steer =
@@ -354,11 +372,35 @@ public class BoidController : MonoBehaviour
     // ----------------- Runtime UI -----------------
     void OnGUI()
     {
-        if (!showUI) return;
+        const float w = 320f;
+        const float handleH = 22f;
+        const float margin = 12f;
 
-        const int w = 320;
-        Rect r = new Rect(12, 12, w, Screen.height - 24);
+        float x = margin;
+        float y = margin;
+
+        // Animate panel height
+        float targetAnim = showPanel ? 1f : 0f;
+        panelAnim = Mathf.SmoothDamp(panelAnim, targetAnim, ref panelAnimVel, 0.15f, Mathf.Infinity, Time.deltaTime);
+
+        float collapsedH = handleH + 4f;
+        float expandedH = Screen.height - margin * 2f;
+        float h = Mathf.Lerp(collapsedH, expandedH, Mathf.Clamp01(panelAnim));
+        Rect r = new Rect(x, y, w, h);
         GUILayout.BeginArea(r, GUI.skin.box);
+
+        // Handle button
+        if (GUILayout.Button(showPanel ? "Boids(F1) ▲" : "Boids(F1) ▼", GUILayout.Height(handleH)))
+        {
+            showPanel = !showPanel;
+        }
+
+        if (!showPanel)
+        {
+            GUILayout.EndArea();
+            return;
+        }
+
         GUILayout.Label("<b>Boids Runtime Settings</b>", new GUIStyle(GUI.skin.label) { richText = true });
 
         scroll = GUILayout.BeginScrollView(scroll);
@@ -375,6 +417,7 @@ public class BoidController : MonoBehaviour
         // Speeds
         minSpeed = SliderT("Min Speed", "Minimum cruising speed (prevents stalling).", minSpeed, 0.1f, maxSpeed);
         maxSpeed = SliderT("Max Speed", "Top speed for desired velocities.", maxSpeed, minSpeed, 15f);
+        maxSpeedCap = SliderT("Max Speed Cap", "Absolute cap after boosts (0 = uncapped).", maxSpeedCap, 0f, 25f);
         maxSteerForce = SliderT("Max Steer", "Upper limit on steering force to avoid jitter.", maxSteerForce, 0.1f, 20f);
 
         GUILayout.Space(6);
@@ -406,6 +449,7 @@ public class BoidController : MonoBehaviour
         weightPredatorAvoid = SliderT("W Predator", "Strength of fleeing response from orcas.", weightPredatorAvoid, 0f, 10f);
         predatorPanicRadius = SliderT("Panic Radius", "Within this distance, boost predator avoidance.", predatorPanicRadius, 0.2f, 5f);
         predatorAvoidBoost = SliderT("Panic Boost", "Multiplier for predator avoidance inside Panic Radius.", predatorAvoidBoost, 1f, 5f);
+        predatorPanicSpeedMultiplier = SliderT("Panic Speed x", "Speed multiplier applied while panicking near an orca.", predatorPanicSpeedMultiplier, 1f, 3f);
 
         GUILayout.Space(6);
         GUILayout.Label("<b>Vertical Steering</b>", new GUIStyle(GUI.skin.label) { richText = true });
@@ -507,27 +551,29 @@ public class BoidController : MonoBehaviour
         return new BoidSettings
         {
             boidCount = boidCount,
-            minSpeed = minSpeed,
-            maxSpeed = maxSpeed,
-            maxSteerForce = maxSteerForce,
-            neighborRadius = neighborRadius,
-            separationRadius = separationRadius,
-            weightSeparation = weightSeparation,
-            weightAlignment = weightAlignment,
+        minSpeed = minSpeed,
+        maxSpeed = maxSpeed,
+        maxSpeedCap = maxSpeedCap,
+        maxSteerForce = maxSteerForce,
+        neighborRadius = neighborRadius,
+        separationRadius = separationRadius,
+        weightSeparation = weightSeparation,
+        weightAlignment = weightAlignment,
             weightCohesion = weightCohesion,
             weightBounds = weightBounds,
             weightObstacleAvoid = weightObstacleAvoid,
-            avoidDistance = avoidDistance,
-            avoidProbeAngle = avoidProbeAngle,
-            predatorAvoidRadius = predatorAvoidRadius,
-            weightPredatorAvoid = weightPredatorAvoid,
-            predatorAvoidBoost = predatorAvoidBoost,
-            predatorPanicRadius = predatorPanicRadius,
-            verticalSteerDamping = verticalSteerDamping,
-            drawDebug = drawDebug,
-            spawnRadius = spawnRadius,
-            maxSpawnAttempts = maxSpawnAttempts
-        };
+        avoidDistance = avoidDistance,
+        avoidProbeAngle = avoidProbeAngle,
+        predatorAvoidRadius = predatorAvoidRadius,
+        weightPredatorAvoid = weightPredatorAvoid,
+        predatorAvoidBoost = predatorAvoidBoost,
+        predatorPanicRadius = predatorPanicRadius,
+        predatorPanicSpeedMultiplier = predatorPanicSpeedMultiplier,
+        verticalSteerDamping = verticalSteerDamping,
+        drawDebug = drawDebug,
+        spawnRadius = spawnRadius,
+        maxSpawnAttempts = maxSpawnAttempts
+    };
     }
 
     void Apply(BoidSettings s, bool respawnIfNeeded = true)
@@ -536,12 +582,12 @@ public class BoidController : MonoBehaviour
         bool needRespawn = s.boidCount != boidCount;
 
         boidCount = s.boidCount;
-        minSpeed = s.minSpeed; maxSpeed = s.maxSpeed; maxSteerForce = s.maxSteerForce;
+        minSpeed = s.minSpeed; maxSpeed = s.maxSpeed; maxSpeedCap = s.maxSpeedCap; maxSteerForce = s.maxSteerForce;
         neighborRadius = s.neighborRadius; separationRadius = s.separationRadius;
         weightSeparation = s.weightSeparation; weightAlignment = s.weightAlignment; weightCohesion = s.weightCohesion; weightBounds = s.weightBounds; weightObstacleAvoid = s.weightObstacleAvoid;
         avoidDistance = s.avoidDistance; avoidProbeAngle = s.avoidProbeAngle;
         predatorAvoidRadius = s.predatorAvoidRadius; weightPredatorAvoid = s.weightPredatorAvoid;
-        predatorAvoidBoost = s.predatorAvoidBoost; predatorPanicRadius = s.predatorPanicRadius;
+        predatorAvoidBoost = s.predatorAvoidBoost; predatorPanicRadius = s.predatorPanicRadius; predatorPanicSpeedMultiplier = s.predatorPanicSpeedMultiplier;
         verticalSteerDamping = s.verticalSteerDamping;
         drawDebug = s.drawDebug;
         spawnRadius = s.spawnRadius;
@@ -626,6 +672,13 @@ public class BoidController : MonoBehaviour
             return true;
         }
         return false;
+    }
+
+    public float GetCappedSpeed(float desiredMax)
+    {
+        if (maxSpeedCap > 0f)
+            return Mathf.Min(desiredMax, maxSpeedCap);
+        return desiredMax;
     }
 
     // ------------- Gizmos -------------

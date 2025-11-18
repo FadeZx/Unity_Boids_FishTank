@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: dc9c5b47b32aa75449574d08d939a60f
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 9100000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 57516
+  packageName: Sea Creatures - Shark, dolphin, stingray and turtle
+  packageVersion: 2.0
+  assetPath: Assets/Sea Creatures - Shark, dolphin, stingray and turtle/Resources/Animators/Killer_whale.controller
+  uploadId: 610898
