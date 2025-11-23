@@ -6,6 +6,10 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using UnityEngine;
+using Unity.Burst;
+using Unity.Collections;
+using Unity.Jobs;
+using Unity.Mathematics;
 
 [DefaultExecutionOrder(-50)]
 public class BoidController : MonoBehaviour
@@ -66,8 +70,13 @@ public class BoidController : MonoBehaviour
     [Tooltip("Scale for up/down steering vs left/right. < 1 makes vertical turning harder.")]
     public float verticalSteerDamping = 0.4f;
 
-    [Header("Debug")]
-    public bool drawDebug = false;
+    [Header("Performance")]
+    [Tooltip("Grid cell size multiplier relative to neighborRadius (fixed).")]
+    [SerializeField, HideInInspector] float cellSizeMultiplier = 2.5f;
+
+    // Always running Burst+Jobs path; kept as a property for agents to query.
+    public bool JobsEnabled => true;
+    public bool drawDebug => false;
 
     [HideInInspector] public List<BoidAgent> agents = new List<BoidAgent>();
 
@@ -83,9 +92,9 @@ public class BoidController : MonoBehaviour
         public float predatorAvoidRadius, weightPredatorAvoid;
         public float predatorAvoidBoost, predatorPanicRadius, predatorPanicSpeedMultiplier;
         public float verticalSteerDamping;
-        public bool drawDebug;
         public float spawnRadius;
         public int maxSpawnAttempts;
+        public float cellSizeMultiplier;
     }
 
     const string kPrefsKey = "Boids_Settings_JSON";
@@ -97,6 +106,18 @@ public class BoidController : MonoBehaviour
     float panelAnimVel = 0f;
     Vector2 scroll;            // UI scroll
     int lastSpawnCount;        // detect boidCount change for respawn
+
+    // Native buffers for the Burst path
+    NativeArray<float3> positions;
+    NativeArray<float3> velocities;
+    NativeArray<float3> positionsNext;
+    NativeArray<float3> velocitiesNext;
+    NativeArray<float3> steers;
+    NativeArray<float> runtimeMaxSpeeds;
+
+    // Temp containers reused each frame
+    NativeParallelMultiHashMap<int, int> grid;
+    bool nativeReady;
 
     void Start()
     {
@@ -132,6 +153,9 @@ public class BoidController : MonoBehaviour
             UnityEditor.EditorApplication.QueuePlayerLoopUpdate();
         }
 #endif
+
+        if (Application.isPlaying)
+            SimulateWithJobs(Time.deltaTime);
     }
 
 
@@ -169,6 +193,7 @@ public class BoidController : MonoBehaviour
             agents.Add(a);
         }
         lastSpawnCount = boidCount;
+        EnsureNativeArrays(agents.Count);
     }
 
     Vector3 GetValidSpawnPosition(Vector3 centerPoint, Bounds area)
@@ -211,6 +236,45 @@ public class BoidController : MonoBehaviour
             Destroy(child.gameObject);
         }
         agents.Clear();
+        nativeReady = false;
+    }
+
+    void OnDestroy()
+    {
+        DisposeNative();
+    }
+
+    void DisposeNative()
+    {
+        if (positions.IsCreated) positions.Dispose();
+        if (velocities.IsCreated) velocities.Dispose();
+        if (positionsNext.IsCreated) positionsNext.Dispose();
+        if (velocitiesNext.IsCreated) velocitiesNext.Dispose();
+        if (steers.IsCreated) steers.Dispose();
+        if (runtimeMaxSpeeds.IsCreated) runtimeMaxSpeeds.Dispose();
+        if (grid.IsCreated) grid.Dispose();
+        nativeReady = false;
+    }
+
+    void EnsureNativeArrays(int count)
+    {
+        if (count <= 0)
+        {
+            DisposeNative();
+            return;
+        }
+
+        if (!positions.IsCreated || positions.Length != count)
+        {
+            DisposeNative();
+            positions = new NativeArray<float3>(count, Allocator.Persistent);
+            velocities = new NativeArray<float3>(count, Allocator.Persistent);
+            positionsNext = new NativeArray<float3>(count, Allocator.Persistent);
+            velocitiesNext = new NativeArray<float3>(count, Allocator.Persistent);
+            steers = new NativeArray<float3>(count, Allocator.Persistent);
+            runtimeMaxSpeeds = new NativeArray<float>(count, Allocator.Persistent);
+        }
+        nativeReady = true;
     }
 
     // Remove a single prey agent (called by predators upon contact)
@@ -223,9 +287,296 @@ public class BoidController : MonoBehaviour
         if (boidCount > 0) boidCount--;
         // Keep lastSpawnCount in sync so Update() doesn't auto-respawn
         lastSpawnCount = boidCount;
+        EnsureNativeArrays(agents.Count);
     }
 
     // ----------------- Steering -----------------
+    [BurstCompile]
+    struct BuildGridJob : IJobParallelFor
+    {
+        [ReadOnly] public NativeArray<float3> positions;
+        public NativeParallelMultiHashMap<int, int>.ParallelWriter grid;
+        public float cellSize;
+
+        public void Execute(int index)
+        {
+            int3 cell = (int3)math.floor(positions[index] / cellSize);
+            grid.Add(Hash(cell), index);
+        }
+
+        static int Hash(int3 cell) => (int)math.hash(cell);
+    }
+
+    [BurstCompile]
+    struct SteerJob : IJobParallelFor
+    {
+        [ReadOnly] public NativeArray<float3> positions;
+        [ReadOnly] public NativeArray<float3> velocities;
+        [ReadOnly] public NativeParallelMultiHashMap<int, int> grid;
+        [ReadOnly] public NativeArray<float3> predators;
+
+        public float dt;
+        public float neighborRadius;
+        public float separationRadius;
+        public float minSpeed;
+        public float maxSpeed;
+        public float maxSpeedCap;
+        public float maxSteerForce;
+        public float weightSeparation, weightAlignment, weightCohesion, weightBounds, weightPredatorAvoid;
+        public float predatorAvoidBoost, predatorPanicRadius, predatorPanicSpeedMultiplier, predatorAvoidRadius;
+        public float verticalSteerDamping;
+        public float cellSize;
+        public float wallPad;
+        public float3 boundsMin;
+        public float3 boundsMax;
+
+        [WriteOnly] public NativeArray<float3> positionsNext;
+        [WriteOnly] public NativeArray<float3> velocitiesNext;
+        [WriteOnly] public NativeArray<float3> steersOut;
+        [WriteOnly] public NativeArray<float> runtimeMaxSpeedOut;
+
+        public void Execute(int index)
+        {
+            float3 pos = positions[index];
+            float3 vel = velocities[index];
+            float3 sep = 0f;
+            float3 ali = 0f;
+            float3 coh = 0f;
+            int neighborCount = 0;
+
+            float nRad2 = neighborRadius * neighborRadius;
+            float sRad2 = separationRadius * separationRadius;
+
+            int3 cell = (int3)math.floor(pos / cellSize);
+            for (int dz = -1; dz <= 1; dz++)
+            {
+                for (int dy = -1; dy <= 1; dy++)
+                {
+                    for (int dx = -1; dx <= 1; dx++)
+                    {
+                        int3 c = cell + new int3(dx, dy, dz);
+                        var it = grid.GetValuesForKey(Hash(c));
+                        while (it.MoveNext())
+                        {
+                            int other = it.Current;
+                            if (other == index) continue;
+                            float3 to = positions[other] - pos;
+                            float d2 = math.lengthsq(to);
+                            if (d2 > nRad2) continue;
+                            neighborCount++;
+
+                            if (d2 < sRad2 && d2 > 1e-6f)
+                                sep -= to / math.max(d2, 1e-6f);
+
+                            ali += velocities[other];
+                            coh += positions[other];
+                        }
+                    }
+                }
+            }
+
+            float3 boundsForce = BoundsSteer(pos, vel);
+            float3 predatorAvoid = 0f;
+            bool predatorPanic = false;
+            float predatorR2 = predatorAvoidRadius * predatorAvoidRadius;
+            float predatorPanicR2 = predatorPanicRadius * predatorPanicRadius;
+            for (int i = 0; i < predators.Length; i++)
+            {
+                float3 toPred = predators[i] - pos;
+                float d2 = math.lengthsq(toPred);
+                if (d2 < predatorR2 && d2 > 1e-6f)
+                {
+                    float boost = 1f;
+                    if (d2 < predatorPanicR2)
+                    {
+                        boost = predatorAvoidBoost;
+                        predatorPanic = true;
+                    }
+                    predatorAvoid -= boost * toPred / math.max(d2, 1e-6f);
+                }
+            }
+
+            float speedLimit = maxSpeed;
+            if (predatorPanic)
+                speedLimit = maxSpeed * predatorPanicSpeedMultiplier;
+            if (maxSpeedCap > 0f)
+                speedLimit = math.min(speedLimit, maxSpeedCap);
+
+            if (predatorAvoid.x != 0f || predatorAvoid.y != 0f || predatorAvoid.z != 0f)
+                predatorAvoid = math.normalizesafe(predatorAvoid) * speedLimit - vel;
+
+            if (neighborCount > 0)
+            {
+                ali = math.normalizesafe(ali / neighborCount) * speedLimit - vel;
+                coh = (coh / neighborCount) - pos;
+            }
+
+            if (math.lengthsq(sep) > 1e-6f)
+                sep = math.normalizesafe(sep) * speedLimit - vel;
+
+            float3 steer =
+                weightSeparation * sep +
+                weightAlignment * ali +
+                weightCohesion * coh +
+                weightBounds * boundsForce +
+                weightPredatorAvoid * predatorAvoid;
+
+            steer.y *= verticalSteerDamping;
+
+            float maxSteer2 = maxSteerForce * maxSteerForce;
+            float steerLen2 = math.lengthsq(steer);
+            if (steerLen2 > maxSteer2)
+                steer = math.normalizesafe(steer) * maxSteerForce;
+
+            float3 v = vel + steer * dt;
+            float vLen = math.length(v);
+            if (vLen > 1e-5f)
+            {
+                vLen = math.clamp(vLen, minSpeed, speedLimit);
+                v = v / math.max(math.length(v), 1e-5f) * vLen;
+            }
+
+            positionsNext[index] = pos + v * dt;
+            velocitiesNext[index] = v;
+            steersOut[index] = steer;
+            runtimeMaxSpeedOut[index] = speedLimit;
+        }
+
+        float3 BoundsSteer(float3 pos, float3 vel)
+        {
+            float3 target = pos;
+            if (pos.x < boundsMin.x + wallPad) target.x = boundsMin.x + wallPad;
+            else if (pos.x > boundsMax.x - wallPad) target.x = boundsMax.x - wallPad;
+
+            if (pos.y < boundsMin.y + wallPad) target.y = boundsMin.y + wallPad;
+            else if (pos.y > boundsMax.y - wallPad) target.y = boundsMax.y - wallPad;
+
+            if (pos.z < boundsMin.z + wallPad) target.z = boundsMin.z + wallPad;
+            else if (pos.z > boundsMax.z - wallPad) target.z = boundsMax.z - wallPad;
+
+            if (!math.any(target != pos)) return 0f;
+
+            float3 desired = math.normalizesafe(target - pos) * maxSpeed;
+            return desired - vel;
+        }
+
+        static int Hash(int3 cell) => (int)math.hash(cell);
+    }
+
+    void SimulateWithJobs(float dt)
+    {
+        int count = agents.Count;
+        EnsureNativeArrays(count);
+        if (!nativeReady || count == 0 || dt <= 0f) return;
+
+        // gather boid data
+        for (int i = 0; i < count; i++)
+        {
+            var a = agents[i];
+            positions[i] = a.transform.position;
+            velocities[i] = a.Velocity;
+        }
+
+        int predatorCount = (predatorController != null && predatorController.pod != null) ? predatorController.pod.Count : 0;
+        NativeArray<float3> predatorPositions = predatorCount > 0
+            ? new NativeArray<float3>(predatorCount, Allocator.TempJob)
+            : default;
+        if (predatorPositions.IsCreated)
+        {
+            for (int i = 0; i < predatorCount; i++)
+                predatorPositions[i] = predatorController.pod[i].transform.position;
+        }
+
+        float cellSize = math.max(0.0001f, neighborRadius * math.max(0.5f, cellSizeMultiplier));
+        int gridCapacity = math.max(count * 4, 1);
+        if (grid.IsCreated) grid.Dispose();
+        grid = new NativeParallelMultiHashMap<int, int>(gridCapacity, Allocator.TempJob);
+
+        var build = new BuildGridJob
+        {
+            positions = positions,
+            grid = grid.AsParallelWriter(),
+            cellSize = cellSize
+        }.Schedule(count, 64);
+
+        Bounds b = simulationArea.bounds;
+        var steerJob = new SteerJob
+        {
+            positions = positions,
+            velocities = velocities,
+            grid = grid,
+            predators = predatorPositions,
+            dt = dt,
+            neighborRadius = neighborRadius,
+            separationRadius = separationRadius,
+            minSpeed = minSpeed,
+            maxSpeed = maxSpeed,
+            maxSpeedCap = maxSpeedCap,
+            maxSteerForce = maxSteerForce,
+            weightSeparation = weightSeparation,
+            weightAlignment = weightAlignment,
+            weightCohesion = weightCohesion,
+            weightBounds = weightBounds,
+            weightPredatorAvoid = weightPredatorAvoid,
+            predatorAvoidBoost = predatorAvoidBoost,
+            predatorPanicRadius = predatorPanicRadius,
+            predatorPanicSpeedMultiplier = predatorPanicSpeedMultiplier,
+            predatorAvoidRadius = predatorAvoidRadius,
+            verticalSteerDamping = verticalSteerDamping,
+            cellSize = cellSize,
+            wallPad = 0.5f,
+            boundsMin = b.min,
+            boundsMax = b.max,
+            positionsNext = positionsNext,
+            velocitiesNext = velocitiesNext,
+            steersOut = steers,
+            runtimeMaxSpeedOut = runtimeMaxSpeeds
+        }.Schedule(count, 64, build);
+
+        steerJob.Complete();
+
+        if (grid.IsCreated) grid.Dispose();
+        if (predatorPositions.IsCreated) predatorPositions.Dispose();
+
+        ApplyJobResults(dt);
+    }
+
+    void ApplyJobResults(float dt)
+    {
+        int count = agents.Count;
+        for (int i = 0; i < count; i++)
+        {
+            var agent = agents[i];
+            Vector3 pos = positionsNext[i];
+            Vector3 vel = velocitiesNext[i];
+            Vector3 steer = steers[i];
+
+            Vector3 avoid = ObstacleAvoid(pos, vel);
+            if (avoid.sqrMagnitude > 0.0001f)
+            {
+                Vector3 avoidForce = avoid * weightObstacleAvoid;
+                steer += avoidForce;
+                vel += avoidForce * dt;
+                float speed = Mathf.Clamp(vel.magnitude, minSpeed, runtimeMaxSpeeds[i]);
+                if (speed > 0.0001f) vel = vel.normalized * speed;
+                pos += vel * dt;
+            }
+
+            agent.Velocity = vel;
+            agent.RuntimeMaxSpeed = runtimeMaxSpeeds[i];
+            agent.transform.position = pos;
+
+            if (vel.sqrMagnitude > 0.0001f)
+            {
+                Vector3 fwd = vel.normalized;
+                Vector3 lateral = steer - Vector3.Dot(steer, fwd) * fwd;
+                float roll = Mathf.Clamp(-lateral.magnitude * agent.bankingAmount, -0.7f, 0.7f);
+                Quaternion targetRot = Quaternion.LookRotation(fwd, Vector3.up) * Quaternion.Euler(0, 0, Mathf.Rad2Deg * roll);
+                agent.transform.rotation = Quaternion.Slerp(agent.transform.rotation, targetRot, 1f - Mathf.Exp(-agent.turnResponsiveness * dt));
+            }
+        }
+    }
+
     public Vector3 ComputeSteering(BoidAgent self, float dt, out (Vector3 sep, Vector3 ali, Vector3 coh, Vector3 bounds, Vector3 avoid) forces)
     {
         Vector3 pos = self.Position;
@@ -345,28 +696,32 @@ public class BoidController : MonoBehaviour
     {
         if (vel.sqrMagnitude < 0.0001f) return Vector3.zero;
         Vector3 fwd = vel.normalized;
-        Vector3 steer = Vector3.zero;
 
-        // Forward ray
-        if (Physics.Raycast(pos, fwd, out RaycastHit hit, avoidDistance, obstacleMask, QueryTriggerInteraction.Ignore))
+        // Cheaper probes: one spherecast forward, one alternating side sweep per frame.
+        float probe = avoidDistance;
+        float sideProbe = avoidDistance * 0.7f;
+        float radius = 0.1f;
+
+        if (Physics.SphereCast(pos, radius, fwd, out RaycastHit hit, probe, obstacleMask, QueryTriggerInteraction.Ignore))
         {
-            Vector3 away = Vector3.Reflect(fwd, hit.normal);
-            steer += away;
+            // Slide along surface normal
+            Vector3 slide = Vector3.ProjectOnPlane(fwd, hit.normal).normalized;
+            float t = 1f - Mathf.Clamp01(hit.distance / probe);
+            return slide * (maxSpeed * (0.8f + 0.6f * t)) - vel * 0.1f;
         }
 
-        // Side feelers
-        Quaternion leftQ = Quaternion.AngleAxis(-avoidProbeAngle, Vector3.up);
-        Quaternion rightQ = Quaternion.AngleAxis(avoidProbeAngle, Vector3.up);
-        Vector3 left = leftQ * fwd;
-        Vector3 right = rightQ * fwd;
+        // Alternate left/right each frame to cut casts in half.
+        bool useLeft = (Time.frameCount & 1) == 0;
+        Quaternion sideQ = Quaternion.AngleAxis(useLeft ? -avoidProbeAngle : avoidProbeAngle, Vector3.up);
+        Vector3 sideDir = sideQ * fwd;
+        if (Physics.SphereCast(pos, radius, sideDir, out hit, sideProbe, obstacleMask, QueryTriggerInteraction.Ignore))
+        {
+            Vector3 slide = Vector3.ProjectOnPlane(fwd, hit.normal).normalized;
+            float t = 1f - Mathf.Clamp01(hit.distance / sideProbe);
+            return slide * (maxSpeed * (0.7f + 0.5f * t)) - vel * 0.1f;
+        }
 
-        if (Physics.Raycast(pos, left, avoidDistance * 0.8f, obstacleMask, QueryTriggerInteraction.Ignore))
-            steer += -Vector3.Cross(Vector3.up, left).normalized;
-
-        if (Physics.Raycast(pos, right, avoidDistance * 0.8f, obstacleMask, QueryTriggerInteraction.Ignore))
-            steer += Vector3.Cross(Vector3.up, right).normalized;
-
-        return steer;
+        return Vector3.zero;
     }
 
     // ----------------- Runtime UI -----------------
@@ -456,7 +811,8 @@ public class BoidController : MonoBehaviour
         verticalSteerDamping = SliderT("Vertical Damping", "Scale for up/down steering vs left/right (<1 = harder to steer vertically).", verticalSteerDamping, 0.1f, 1f);
 
         // Debug
-        drawDebug = ToggleT("Draw Debug", "Render debug gizmos/lines.", drawDebug);
+        GUILayout.Label("<b>Performance</b>", new GUIStyle(GUI.skin.label) { richText = true });
+        GUILayout.Label("Burst+Jobs ON · Cell Size x2.5 · Obstacle Avoid ON", new GUIStyle(GUI.skin.label) { fontSize = 11 });
 
         GUILayout.Space(10);
         GUILayout.Label($"Save Path:\n<size=10>{Application.persistentDataPath}</size>", new GUIStyle(GUI.skin.label) { richText = true, wordWrap = true });
@@ -570,9 +926,9 @@ public class BoidController : MonoBehaviour
         predatorPanicRadius = predatorPanicRadius,
         predatorPanicSpeedMultiplier = predatorPanicSpeedMultiplier,
         verticalSteerDamping = verticalSteerDamping,
-        drawDebug = drawDebug,
         spawnRadius = spawnRadius,
-        maxSpawnAttempts = maxSpawnAttempts
+        maxSpawnAttempts = maxSpawnAttempts,
+        cellSizeMultiplier = cellSizeMultiplier
     };
     }
 
@@ -589,9 +945,10 @@ public class BoidController : MonoBehaviour
         predatorAvoidRadius = s.predatorAvoidRadius; weightPredatorAvoid = s.weightPredatorAvoid;
         predatorAvoidBoost = s.predatorAvoidBoost; predatorPanicRadius = s.predatorPanicRadius; predatorPanicSpeedMultiplier = s.predatorPanicSpeedMultiplier;
         verticalSteerDamping = s.verticalSteerDamping;
-        drawDebug = s.drawDebug;
         spawnRadius = s.spawnRadius;
         maxSpawnAttempts = s.maxSpawnAttempts;
+        cellSizeMultiplier = s.cellSizeMultiplier;
+        // obstacle avoidance is always on; debug is always off
 
         if (respawnIfNeeded && needRespawn) Respawn();
     }

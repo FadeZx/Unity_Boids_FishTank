@@ -15,7 +15,8 @@ public class BoidAgent : MonoBehaviour
 
     void Update()
     {
-        if (!controller) return;
+        // Skip per-agent update when controller runs the Burst/job pipeline.
+        if (!controller || controller.JobsEnabled) return;
         float dt = Time.deltaTime;
 
         // Steering + debug forces

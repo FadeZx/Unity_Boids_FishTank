@@ -122,6 +122,7 @@ GameObject:
   m_Component:
   - component: {fileID: 3536291401491083147}
   - component: {fileID: 1951385812654012274}
+  - component: {fileID: 1430898854102230751}
   m_Layer: 0
   m_Name: Fish-prey
   m_TagString: Untagged
@@ -161,6 +162,31 @@ MonoBehaviour:
   controller: {fileID: 0}
   turnResponsiveness: 6
   bankingAmount: 0.4
+--- !u!205 &1430898854102230751
+LODGroup:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 6893057930982370179}
+  serializedVersion: 2
+  m_LocalReferencePoint: {x: 0, y: 0, z: 0}
+  m_Size: 1
+  m_FadeMode: 1
+  m_AnimateCrossFading: 1
+  m_LastLODIsBillboard: 0
+  m_LODs:
+  - screenRelativeHeight: 0.05314571
+    fadeTransitionWidth: 0
+    renderers:
+    - renderer: {fileID: 4547690645339739125}
+    - renderer: {fileID: 3088901360729951413}
+    - renderer: {fileID: 2192751000742064533}
+  - screenRelativeHeight: 0.006159764
+    fadeTransitionWidth: 0
+    renderers:
+    - renderer: {fileID: 3623493475119748745}
+  m_Enabled: 1
 --- !u!1001 &7874659845739690970
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -169,6 +195,14 @@ PrefabInstance:
     serializedVersion: 3
     m_TransformParent: {fileID: 3536291401491083147}
     m_Modifications:
+    - target: {fileID: 1565266165269977505, guid: 8ba2795c96cb4b24badb3062dc658d6e, type: 3}
+      propertyPath: m_Name
+      value: FishC LOD2
+      objectReference: {fileID: 0}
+    - target: {fileID: 1597545831070797792, guid: 8ba2795c96cb4b24badb3062dc658d6e, type: 3}
+      propertyPath: m_Name
+      value: FishC LOD
+      objectReference: {fileID: 0}
     - target: {fileID: 3266958007847955399, guid: 8ba2795c96cb4b24badb3062dc658d6e, type: 3}
       propertyPath: m_LocalPosition.x
       value: 0
@@ -209,15 +243,40 @@ PrefabInstance:
       propertyPath: m_LocalEulerAnglesHint.z
       value: 45
       objectReference: {fileID: 0}
+    - target: {fileID: 7446693000841781907, guid: 8ba2795c96cb4b24badb3062dc658d6e, type: 3}
+      propertyPath: m_Enabled
+      value: 1
+      objectReference: {fileID: 0}
     - target: {fileID: 7989850265055249295, guid: 8ba2795c96cb4b24badb3062dc658d6e, type: 3}
       propertyPath: m_Name
       value: TunaFish
       objectReference: {fileID: 0}
     m_RemovedComponents: []
-    m_RemovedGameObjects: []
+    m_RemovedGameObjects:
+    - {fileID: 1565266165269977505, guid: 8ba2795c96cb4b24badb3062dc658d6e, type: 3}
     m_AddedGameObjects: []
     m_AddedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: 8ba2795c96cb4b24badb3062dc658d6e, type: 3}
+--- !u!137 &2192751000742064533 stripped
+SkinnedMeshRenderer:
+  m_CorrespondingSourceObject: {fileID: 8297422728580057679, guid: 8ba2795c96cb4b24badb3062dc658d6e, type: 3}
+  m_PrefabInstance: {fileID: 7874659845739690970}
+  m_PrefabAsset: {fileID: 0}
+--- !u!137 &3088901360729951413 stripped
+SkinnedMeshRenderer:
+  m_CorrespondingSourceObject: {fileID: 5158189495993972591, guid: 8ba2795c96cb4b24badb3062dc658d6e, type: 3}
+  m_PrefabInstance: {fileID: 7874659845739690970}
+  m_PrefabAsset: {fileID: 0}
+--- !u!137 &3623493475119748745 stripped
+SkinnedMeshRenderer:
+  m_CorrespondingSourceObject: {fileID: 6845846875588652371, guid: 8ba2795c96cb4b24badb3062dc658d6e, type: 3}
+  m_PrefabInstance: {fileID: 7874659845739690970}
+  m_PrefabAsset: {fileID: 0}
+--- !u!137 &4547690645339739125 stripped
+SkinnedMeshRenderer:
+  m_CorrespondingSourceObject: {fileID: 5932592990027458607, guid: 8ba2795c96cb4b24badb3062dc658d6e, type: 3}
+  m_PrefabInstance: {fileID: 7874659845739690970}
+  m_PrefabAsset: {fileID: 0}
 --- !u!4 &4620404697646075933 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: 3266958007847955399, guid: 8ba2795c96cb4b24badb3062dc658d6e, type: 3}

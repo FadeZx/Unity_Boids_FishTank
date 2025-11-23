@@ -6,6 +6,8 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using UnityEngine;
+using Unity.Collections;
+using Unity.Mathematics;
 
 [DefaultExecutionOrder(-49)] // after BoidController (-50)
 public class OrcaController : MonoBehaviour
@@ -107,6 +109,10 @@ public class OrcaController : MonoBehaviour
 
     public readonly List<OrcaAgent> pod = new();
     Vector3 preyCentroid, preyAvgVel;
+    NativeArray<float3> preyPositions;
+    NativeParallelMultiHashMap<int, int> preyGrid;
+    float preyCellSize = 1.5f;
+    bool preyGridReady;
 
     // UI
     bool showUI = true; // always draw handle; F2 collapses/expands panel
@@ -136,6 +142,11 @@ public class OrcaController : MonoBehaviour
         cameraController?.SyncTargetGroup(pod);
     }
 
+    void OnDestroy()
+    {
+        DisposePreyGrid();
+    }
+
     void Update()
     {
         // Toggle panel collapse/expand with F2
@@ -143,6 +154,7 @@ public class OrcaController : MonoBehaviour
 
         // compute prey centroid/avg vel once per frame
         GetPreyStats(out preyCentroid, out preyAvgVel);
+        BuildPreyGrid();
 
         // periodic target assignment for each orca
         AssignTargetsPeriodically(Time.deltaTime);
@@ -176,6 +188,36 @@ public class OrcaController : MonoBehaviour
             UnityEditor.EditorApplication.QueuePlayerLoopUpdate();
         }
 #endif
+        DisposePreyGrid();
+    }
+
+    void BuildPreyGrid()
+    {
+        DisposePreyGrid();
+        var list = preyController != null ? preyController.agents : null;
+        if (list == null || list.Count == 0) return;
+
+        int count = list.Count;
+        preyPositions = new NativeArray<float3>(count, Allocator.TempJob);
+        for (int i = 0; i < count; i++)
+            preyPositions[i] = list[i].transform.position;
+
+        preyCellSize = Mathf.Max(0.25f, preyController.neighborRadius);
+        int capacity = Mathf.Max(1, count * 4);
+        preyGrid = new NativeParallelMultiHashMap<int, int>(capacity, Allocator.TempJob);
+        for (int i = 0; i < count; i++)
+        {
+            int3 cell = (int3)math.floor(preyPositions[i] / preyCellSize);
+            preyGrid.Add(Hash(cell), i);
+        }
+        preyGridReady = true;
+    }
+
+    void DisposePreyGrid()
+    {
+        if (preyPositions.IsCreated) preyPositions.Dispose();
+        if (preyGrid.IsCreated) preyGrid.Dispose();
+        preyGridReady = false;
     }
 
     // ---------------- Spawning / Roles ----------------
@@ -429,29 +471,28 @@ public class OrcaController : MonoBehaviour
     Vector3 ObstacleAvoid(Vector3 pos, Vector3 vel)
     {
         if (vel.sqrMagnitude < 1e-8f) return Vector3.zero;
-        float probe = avoidDistance;
-        if (avoidDistanceCap > 0f)
-            probe = Mathf.Min(probe, avoidDistanceCap);
+        float probe = avoidDistanceCap > 0f ? Mathf.Min(avoidDistance, avoidDistanceCap) : avoidDistance;
         Vector3 fwd = vel.normalized;
 
-        Vector3[] dirs = new Vector3[]
+        // Forward spherecast; if clear, alternate a single side sweep each frame (cuts cast count).
+        if (Physics.SphereCast(pos, orcaRadius, fwd, out RaycastHit hit, probe, obstacleMask, QueryTriggerInteraction.Ignore))
         {
-            fwd,
-            Quaternion.AngleAxis( avoidProbeAngle, Vector3.up) * fwd,
-            Quaternion.AngleAxis(-avoidProbeAngle, Vector3.up) * fwd,
-            Quaternion.AngleAxis( avoidProbeAngle, Vector3.right) * fwd,
-            Quaternion.AngleAxis(-avoidProbeAngle, Vector3.right) * fwd,
-        };
-
-        for (int i = 0; i < dirs.Length; i++)
-        {
-            if (Physics.SphereCast(pos, orcaRadius, dirs[i], out RaycastHit hit, probe, obstacleMask, QueryTriggerInteraction.Ignore))
-            {
-                Vector3 slide = Vector3.ProjectOnPlane(fwd, hit.normal).normalized;
-                float t = 1f - Mathf.Clamp01(hit.distance / probe);
-                return slide * (maxSpeed * (0.75f + 1.25f * t)) - vel * 0.1f;
-            }
+            Vector3 slide = Vector3.ProjectOnPlane(fwd, hit.normal).normalized;
+            float t = 1f - Mathf.Clamp01(hit.distance / probe);
+            return slide * (maxSpeed * (0.8f + 0.6f * t)) - vel * 0.1f;
         }
+
+        bool useLeft = (Time.frameCount & 1) == 0;
+        Quaternion sideQ = Quaternion.AngleAxis(useLeft ? -avoidProbeAngle : avoidProbeAngle, Vector3.up);
+        Vector3 sideDir = sideQ * fwd;
+        float sideProbe = probe * 0.7f;
+        if (Physics.SphereCast(pos, orcaRadius, sideDir, out hit, sideProbe, obstacleMask, QueryTriggerInteraction.Ignore))
+        {
+            Vector3 slide = Vector3.ProjectOnPlane(fwd, hit.normal).normalized;
+            float t = 1f - Mathf.Clamp01(hit.distance / sideProbe);
+            return slide * (maxSpeed * (0.7f + 0.5f * t)) - vel * 0.1f;
+        }
+
         return Vector3.zero;
     }
 
@@ -588,25 +629,74 @@ public class OrcaController : MonoBehaviour
 
     BoidAgent FindNearestPrey(Vector3 pos)
     {
-        BoidAgent best = null; float bestD2 = float.PositiveInfinity;
         var list = preyController.agents;
-        for (int i = 0; i < list.Count; i++)
+        if (!preyGridReady)
         {
-            float d2 = (list[i].Position - pos).sqrMagnitude;
-            if (d2 < bestD2) { bestD2 = d2; best = list[i]; }
+            BoidAgent bestFallback = null; float bestD2Fallback = float.PositiveInfinity;
+            for (int i = 0; i < list.Count; i++)
+            {
+                float d2 = (list[i].Position - pos).sqrMagnitude;
+                if (d2 < bestD2Fallback) { bestD2Fallback = d2; bestFallback = list[i]; }
+            }
+            return bestFallback;
+        }
+
+        float bestD2 = float.PositiveInfinity;
+        BoidAgent best = null;
+        int3 cell = (int3)math.floor((float3)pos / preyCellSize);
+        float searchR = preyController.neighborRadius * 1.5f;
+        float searchR2 = searchR * searchR;
+        for (int dz = -1; dz <= 1; dz++)
+        for (int dy = -1; dy <= 1; dy++)
+        for (int dx = -1; dx <= 1; dx++)
+        {
+            int3 c = cell + new int3(dx, dy, dz);
+            var it = preyGrid.GetValuesForKey(Hash(c));
+            while (it.MoveNext())
+            {
+                int idx = it.Current;
+                float d2 = math.lengthsq(preyPositions[idx] - (float3)pos);
+                if (d2 < bestD2 && d2 <= searchR2)
+                {
+                    bestD2 = d2;
+                    best = list[idx];
+                }
+            }
         }
         return best;
     }
 
     int CountPreyNeighbors(Vector3 center, float radius)
     {
-        int count = 0;
-        float r2 = radius * radius;
         var list = preyController.agents;
-        for (int i = 0; i < list.Count; i++)
+        if (!preyGridReady)
         {
-            Vector3 to = list[i].Position - center;
-            if (to.sqrMagnitude <= r2) count++;
+            int c = 0;
+            float r2 = radius * radius;
+            for (int i = 0; i < list.Count; i++)
+            {
+                Vector3 to = list[i].Position - center;
+                if (to.sqrMagnitude <= r2) c++;
+            }
+            return c;
+        }
+
+        int count = 0;
+        float r2p = radius * radius;
+        int3 cell = (int3)math.floor((float3)center / preyCellSize);
+        int range = Mathf.CeilToInt(radius / preyCellSize) + 1;
+        for (int dz = -range; dz <= range; dz++)
+        for (int dy = -range; dy <= range; dy++)
+        for (int dx = -range; dx <= range; dx++)
+        {
+            int3 c = cell + new int3(dx, dy, dz);
+            var it = preyGrid.GetValuesForKey(Hash(c));
+            while (it.MoveNext())
+            {
+                int idx = it.Current;
+                float d2 = math.lengthsq(preyPositions[idx] - (float3)center);
+                if (d2 <= r2p) count++;
+            }
         }
         return count;
     }
@@ -917,6 +1007,8 @@ public class OrcaController : MonoBehaviour
         return Input.GetKeyDown(KeyCode.F2);
 #endif
     }
+
+    static int Hash(int3 cell) => (int)math.hash(cell);
 
     // ------------- Gizmos -------------
     void OnDrawGizmosSelected()
