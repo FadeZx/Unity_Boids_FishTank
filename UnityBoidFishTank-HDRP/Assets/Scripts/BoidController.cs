@@ -10,6 +10,9 @@ using Unity.Burst;
 using Unity.Collections;
 using Unity.Jobs;
 using Unity.Mathematics;
+#if UNITY_EDITOR
+using UnityEditor;
+#endif
 
 [DefaultExecutionOrder(-50)]
 public class BoidController : MonoBehaviour
@@ -72,11 +75,17 @@ public class BoidController : MonoBehaviour
 
     [Header("Performance")]
     [Tooltip("Grid cell size multiplier relative to neighborRadius (fixed).")]
-    [SerializeField, HideInInspector] float cellSizeMultiplier = 2.5f;
+    [SerializeField, HideInInspector] float cellSizeMultiplier = 1.0f;
 
     // Always running Burst+Jobs path; kept as a property for agents to query.
     public bool JobsEnabled => true;
-    public bool drawDebug => false;
+    public bool drawDebug = false;
+
+    [Header("Debug")]
+    [Tooltip("Draw hashed grid cells occupied by boids (play mode only).")]
+    public bool debugDrawGrid = false;
+    [Tooltip("Show neighbor counts above boids (play mode only).")]
+    public bool debugNeighborCounts = false;
 
     [HideInInspector] public List<BoidAgent> agents = new List<BoidAgent>();
 
@@ -95,6 +104,9 @@ public class BoidController : MonoBehaviour
         public float spawnRadius;
         public int maxSpawnAttempts;
         public float cellSizeMultiplier;
+        public bool drawDebug;
+        public bool debugDrawGrid;
+        public bool debugNeighborCounts;
     }
 
     const string kPrefsKey = "Boids_Settings_JSON";
@@ -811,8 +823,10 @@ public class BoidController : MonoBehaviour
         verticalSteerDamping = SliderT("Vertical Damping", "Scale for up/down steering vs left/right (<1 = harder to steer vertically).", verticalSteerDamping, 0.1f, 1f);
 
         // Debug
-        GUILayout.Label("<b>Performance</b>", new GUIStyle(GUI.skin.label) { richText = true });
-        GUILayout.Label("Burst+Jobs ON · Cell Size x2.5 · Obstacle Avoid ON", new GUIStyle(GUI.skin.label) { fontSize = 11 });
+        GUILayout.Label("<b>Debug</b>", new GUIStyle(GUI.skin.label) { richText = true });
+        drawDebug = ToggleT("Draw Forces", "Render per-boid debug force vectors.", drawDebug);
+        debugDrawGrid = ToggleT("Draw Grid", "Visualize spatial hash cells occupied by boids (play mode).", debugDrawGrid);
+        debugNeighborCounts = ToggleT("Neighbor Counts", "Show neighbor counts above boids (play mode).", debugNeighborCounts);
 
         GUILayout.Space(10);
         GUILayout.Label($"Save Path:\n<size=10>{Application.persistentDataPath}</size>", new GUIStyle(GUI.skin.label) { richText = true, wordWrap = true });
@@ -928,7 +942,10 @@ public class BoidController : MonoBehaviour
         verticalSteerDamping = verticalSteerDamping,
         spawnRadius = spawnRadius,
         maxSpawnAttempts = maxSpawnAttempts,
-        cellSizeMultiplier = cellSizeMultiplier
+        cellSizeMultiplier = cellSizeMultiplier,
+        drawDebug = drawDebug,
+        debugDrawGrid = debugDrawGrid,
+        debugNeighborCounts = debugNeighborCounts
     };
     }
 
@@ -948,7 +965,10 @@ public class BoidController : MonoBehaviour
         spawnRadius = s.spawnRadius;
         maxSpawnAttempts = s.maxSpawnAttempts;
         cellSizeMultiplier = s.cellSizeMultiplier;
-        // obstacle avoidance is always on; debug is always off
+        drawDebug = s.drawDebug;
+        debugDrawGrid = s.debugDrawGrid;
+        debugNeighborCounts = s.debugNeighborCounts;
+        // obstacle avoidance is always on
 
         if (respawnIfNeeded && needRespawn) Respawn();
     }
@@ -1102,6 +1122,51 @@ public class BoidController : MonoBehaviour
         // Show spawn center point
         Gizmos.color = new Color(0f, 1f, 0f, 0.6f);
         Gizmos.DrawWireCube(centerPoint, Vector3.one * 0.3f);
+
+#if UNITY_EDITOR
+        if (!Application.isPlaying || agents.Count == 0) return;
+
+        float cellSize = math.max(0.0001f, neighborRadius * cellSizeMultiplier);
+
+        if (debugDrawGrid)
+        {
+            var seen = new System.Collections.Generic.HashSet<Vector3Int>();
+            Gizmos.color = new Color(0f, 1f, 1f, 0.12f);
+            for (int i = 0; i < agents.Count; i++)
+            {
+                Vector3 p = agents[i].transform.position;
+                Vector3Int cell = Vector3Int.FloorToInt(p / cellSize);
+                if (seen.Add(cell))
+                {
+                    Vector3 c = (Vector3)cell * cellSize + Vector3.one * (cellSize * 0.5f);
+                    Gizmos.DrawCube(c, Vector3.one * cellSize);
+                    Gizmos.color = new Color(0f, 1f, 1f, 0.4f);
+                    Gizmos.DrawWireCube(c, Vector3.one * cellSize);
+                    Gizmos.color = new Color(0f, 1f, 1f, 0.12f);
+                }
+            }
+        }
+
+        if (debugNeighborCounts)
+        {
+            Handles.color = Color.white;
+            float r2 = neighborRadius * neighborRadius;
+            for (int i = 0; i < agents.Count; i++)
+            {
+                var a = agents[i];
+                int count = 0;
+                Vector3 pos = a.transform.position;
+                for (int j = 0; j < agents.Count; j++)
+                {
+                    if (i == j) continue;
+                    Vector3 to = agents[j].transform.position - pos;
+                    if (to.sqrMagnitude <= r2) count++;
+                }
+                Vector3 labelPos = pos + Vector3.up * 0.4f;
+                Handles.Label(labelPos, count.ToString());
+            }
+        }
+#endif
     }
 
 

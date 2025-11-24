@@ -41,15 +41,7 @@ public class BoidAgent : MonoBehaviour
 #if UNITY_EDITOR
         // --- Draw debug vectors ---
         if (controller.drawDebug)
-        {
-            // If controller is selected → show all lines
-            bool showAll = UnityEditor.Selection.activeGameObject == controller.gameObject;
-            // If this object is selected → show this one
-            bool showSelf = UnityEditor.Selection.activeGameObject == gameObject;
-
-            if (showAll || showSelf)
-                DrawDebugVectors(f);
-        }
+            DrawDebugVectors(f);
 #endif
     }
 
