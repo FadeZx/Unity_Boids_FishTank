@@ -42,7 +42,7 @@ MonoBehaviour:
     m_Value: 2000
   baseHeight:
     m_OverrideState: 1
-    m_Value: -47
+    m_Value: -50
   maximumHeight:
     m_OverrideState: 1
     m_Value: 50
@@ -60,7 +60,7 @@ MonoBehaviour:
     m_Value: 0.8
   depthExtent:
     m_OverrideState: 1
-    m_Value: 150
+    m_Value: 1000
   denoisingMode:
     m_OverrideState: 1
     m_Value: 3
@@ -523,7 +523,7 @@ MonoBehaviour:
     m_Value: 55261.973
   aerosolDensity:
     m_OverrideState: 1
-    m_Value: 0.05
+    m_Value: 0.189
   aerosolTint:
     m_OverrideState: 0
     m_Value: {r: 0.91194963, g: 0.97256786, b: 1, a: 1}

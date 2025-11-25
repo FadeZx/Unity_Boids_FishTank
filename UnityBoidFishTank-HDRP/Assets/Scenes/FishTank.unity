@@ -1213,7 +1213,7 @@ MonoBehaviour:
     LookAtTarget: {fileID: 0}
     CustomLookAtTarget: 0
   Lens:
-    FieldOfView: 100
+    FieldOfView: 99.8
     OrthographicSize: 5
     NearClipPlane: 0.3
     FarClipPlane: 1000
