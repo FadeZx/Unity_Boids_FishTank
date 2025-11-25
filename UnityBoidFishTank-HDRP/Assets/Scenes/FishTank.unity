@@ -2125,11 +2125,11 @@ Terrain:
   serializedVersion: 6
   m_TerrainData: {fileID: 15600000, guid: 451ac38a93d1ee443bd2187173f41de3, type: 2}
   m_TreeDistance: 5000
-  m_TreeBillboardDistance: 1149
+  m_TreeBillboardDistance: 336
   m_TreeCrossFadeLength: 16.7
   m_TreeMaximumFullLODCount: 50
-  m_DetailObjectDistance: 1000
-  m_DetailObjectDensity: 1
+  m_DetailObjectDistance: 296
+  m_DetailObjectDensity: 0.539
   m_HeightmapPixelError: 5
   m_SplatMapDistance: 1000
   m_HeightmapMinimumLODSimplification: 5
@@ -15049,6 +15049,9 @@ MonoBehaviour:
   predatorPanicSpeedMultiplier: 1.25
   verticalSteerDamping: 0.4
   cellSizeMultiplier: 1
+  drawDebug: 0
+  debugDrawGrid: 0
+  debugNeighborCounts: 0
   agents: []
 --- !u!4 &1604424822
 Transform:
