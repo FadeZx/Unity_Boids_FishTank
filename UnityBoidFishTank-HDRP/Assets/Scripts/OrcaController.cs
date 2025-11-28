@@ -852,7 +852,7 @@ public class OrcaController : MonoBehaviour
 
         GUILayout.Space(6);
         GUILayout.Label("<b>Spawning</b>", new GUIStyle(GUI.skin.label) { richText = true });
-        spawnRadius = SliderT("Spawn Radius", "Distance from tank center for spawning ring (gizmo shows exact radius).", spawnRadius, 1f, 30f);
+        spawnRadius = SliderT("Spawn Radius", "Distance from tank center for spawning ring (gizmo shows exact radius).", spawnRadius, 1f, 100f);
         maxSpawnAttempts = IntSliderT("Max Spawn Attempts", "Maximum attempts to find valid spawn position outside tank.", maxSpawnAttempts, 10, 200);
 
         GUILayout.Space(6);

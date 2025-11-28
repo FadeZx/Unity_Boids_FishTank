@@ -778,7 +778,7 @@ public class BoidController : MonoBehaviour
 
         GUILayout.Space(6);
         GUILayout.Label("<b>Spawning</b>", new GUIStyle(GUI.skin.label) { richText = true });
-        spawnRadius = SliderT("Spawn Radius", "Distance from tank center for spawning ring (gizmo shows exact radius).", spawnRadius, 0.5f, 20f);
+        spawnRadius = SliderT("Spawn Radius", "Distance from tank center for spawning ring (gizmo shows exact radius).", spawnRadius, 0.5f, 100f);
         maxSpawnAttempts = IntSliderT("Max Spawn Attempts", "Maximum attempts to find valid spawn position outside tank.", maxSpawnAttempts, 10, 200);
 
         // Speeds
