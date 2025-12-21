@@ -842,7 +842,7 @@ public class OrcaController : MonoBehaviour
         scroll = GUILayout.BeginScrollView(scroll);
 
         GUILayout.Label("<b>Roles</b>", new GUIStyle(GUI.skin.label) { richText = true });
-        leaders = IntSliderT("Leaders", "Number of leaders (strong pursuit toward intercept).", leaders, 1, 4);
+        leaders = IntSliderT("Leaders", "Number of leaders (strong pursuit toward intercept).", leaders, 1, 16);
         flankers = IntSliderT("Flankers", "Orcas that orbit prey on a ring to constrain it.", flankers, 0, 16);
         strikers = IntSliderT("Strikers", "Orcas that dash in to strike when close.", strikers, 0, 16);
         supports = IntSliderT("Supports", "Orcas that stay behind prey to corral it.", supports, 0, 16);
