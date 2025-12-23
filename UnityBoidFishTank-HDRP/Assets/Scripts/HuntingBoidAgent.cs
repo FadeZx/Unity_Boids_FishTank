@@ -2,13 +2,11 @@ using UnityEngine;
 using UnityEngine.Events;
 using TMPro;
 
-public enum HunterRole { Leader, Flanker, Striker, Support }
-
 [RequireComponent(typeof(Transform))]
 public class HuntingBoidAgent : MonoBehaviour
 {
     [HideInInspector] public HuntingBoidController controller;
-    [HideInInspector] public HunterRole role;
+    [HideInInspector] public bool IsStrikingNow { get; set; }
 
     // Per-agent target lock
     public BoidAgent CurrentTarget;
@@ -23,6 +21,8 @@ public class HuntingBoidAgent : MonoBehaviour
     public Color colorHasTarget = Color.blue;
     [Tooltip("Color when striking.")]
     public Color colorStriking = Color.red;
+    [Tooltip("Color while holding/winding up a strike.")]
+    public Color colorHold = Color.green;
     [Tooltip("Blend speed for debug color changes.")]
     public float colorLerpSpeed = 6f;
 
@@ -49,7 +49,7 @@ public class HuntingBoidAgent : MonoBehaviour
     public float bankingAmount = 0.5f;
 
     [Header("Labels")]
-    [Tooltip("Assign the TextMeshPro TMP_Text component for the role label.")]
+    [Tooltip("Assign the TextMeshPro TMP_Text component for the state label.")]
     public TMP_Text roleLabel;
 
     [Header("Collision / Capture")]
@@ -59,6 +59,8 @@ public class HuntingBoidAgent : MonoBehaviour
     public Collider captureTrigger;
     [Tooltip("Layer mask that can be captured. Leave to Everything to allow any layer.")]
     public LayerMask captureLayers = ~0;
+    [Tooltip("Minimum speed required to register a capture. Set to 0 to always allow.")]
+    public float captureMinSpeed = 0f;
     [Tooltip("Invoked when this agent captures a target (passes the captured collider).")]
     public UnityEvent<Collider> OnCapture = new UnityEvent<Collider>();
 
@@ -76,6 +78,10 @@ public class HuntingBoidAgent : MonoBehaviour
 
     float strikeCooldownTimer = 0f;
     float strikeBoostTimer = 0f;
+    float strikeDashTimer = 0f;
+    float strikeWindupTimer = 0f;
+    bool strikeWindupActive = false;
+    Vector3 strikeDashDir = Vector3.forward;
     float eatTimer = 0f;
 
     void Awake()
@@ -103,8 +109,12 @@ public class HuntingBoidAgent : MonoBehaviour
         if (strikeCooldownTimer > 0f) strikeCooldownTimer -= dt;
         if (targetHoldTimer > 0f) targetHoldTimer -= dt;
 
-        if (CurrentTarget != null && (CurrentTarget.controller == null || CurrentTarget.gameObject == null))
+        if (CurrentTarget != null && CurrentTarget.gameObject == null)
             ClearTarget();
+
+        // Ensure every hunter keeps a target lock when targets exist
+        if (controller != null && !HasTarget)
+            controller.EnsureAgentHasTarget(this);
 
         var steer = controller.ComputeSteering(this, dt, out _);
 
@@ -155,7 +165,18 @@ public class HuntingBoidAgent : MonoBehaviour
                 if (toCam.sqrMagnitude > 1e-6f)
                     roleLabel.transform.rotation = Quaternion.LookRotation(-toCam.normalized, Vector3.up);
             }
-            roleLabel.text = role.ToString();
+            // State text coloring: white = idle/no target, blue = tracking, red = striking, green = windup/hold
+            Color labelColor = Color.white;
+            if (InStrikeWindup) labelColor = colorHold;
+            else if (strikeBoostTimer > 0f) labelColor = Color.red;
+            else if (HasTarget) labelColor = Color.blue;
+            roleLabel.color = labelColor;
+
+            string state = "Searching";
+            if (InStrikeWindup) state = "Hold";
+            else if (strikeBoostTimer > 0f) state = "Strike";
+            else if (HasTarget) state = "Hunting";
+            roleLabel.text = state;
         }
 
         UpdateDebugColor(dt);
@@ -171,6 +192,40 @@ public class HuntingBoidAgent : MonoBehaviour
             animator.SetBool(animSwimFast, true);
     }
 
+    public void SetStrikeWindup(Vector3 dir, float duration)
+    {
+        strikeDashDir = dir.sqrMagnitude > 1e-6f ? dir.normalized : Vector3.forward;
+        strikeWindupTimer = duration;
+        strikeWindupActive = true;
+        IsStrikingNow = false;
+    }
+
+    public void BeginStrikeDash(Vector3 dir, float duration)
+    {
+        strikeDashDir = dir.sqrMagnitude > 1e-6f ? dir.normalized : strikeDashDir;
+        strikeDashTimer = duration;
+        IsStrikingNow = true;
+        strikeWindupActive = false;
+        strikeWindupTimer = 0f;
+        // Immediately set velocity to dash speed so strike kicks in without relying on steering force limits
+        if (controller != null)
+            Velocity = strikeDashDir * (controller.maxSpeed * controller.strikeBoost);
+        NotifyStrikeBoost();
+        ResetStrikeCooldown();
+    }
+
+    public void CancelStrikeWindup()
+    {
+        strikeWindupTimer = 0f;
+        strikeWindupActive = false;
+        IsStrikingNow = false;
+    }
+
+    public bool InStrikeWindup => strikeWindupActive;
+    public bool InStrikeDash => strikeDashTimer > 0f;
+    public Vector3 StrikeDashDirection => strikeDashDir;
+    public float StrikeWindupRemaining => strikeWindupTimer;
+
     void BeginEatState()
     {
         eatTimer = eatDuration;
@@ -185,7 +240,9 @@ public class HuntingBoidAgent : MonoBehaviour
     {
         if (debugRenderer == null) return;
         Color targetColor = HasTarget ? colorHasTarget : debugRenderer.material.color;
-        if (strikeBoostTimer > 0f)
+        if (InStrikeWindup)
+            targetColor = colorHold;
+        else if (strikeBoostTimer > 0f)
             targetColor = colorStriking;
         var mat = debugRenderer.material;
         mat.color = Color.Lerp(mat.color, targetColor, 1f - Mathf.Exp(-colorLerpSpeed * dt));
@@ -198,6 +255,19 @@ public class HuntingBoidAgent : MonoBehaviour
             strikeBoostTimer -= dt;
             if (strikeBoostTimer <= 0f && animator != null)
                 animator.SetBool(animSwimFast, false);
+        }
+
+        if (strikeWindupActive)
+        {
+            strikeWindupTimer -= dt;
+            if (strikeWindupTimer < 0f) strikeWindupTimer = 0f;
+        }
+
+        if (strikeDashTimer > 0f)
+        {
+            strikeDashTimer -= dt;
+            if (strikeDashTimer <= 0f)
+                IsStrikingNow = false;
         }
 
         if (eatTimer > 0f)
@@ -233,6 +303,7 @@ public class HuntingBoidAgent : MonoBehaviour
     void TryCapture(Collider col)
     {
         if (!IsLayerAllowed(col)) return;
+        if (!IsSpeedEnough()) return;
         if (IsEating()) return;
         // Fire event for any allowed collider (bullet-style); no BoidAgent check required.
         OnCapture.Invoke(col);
@@ -244,6 +315,12 @@ public class HuntingBoidAgent : MonoBehaviour
     bool IsLayerAllowed(Collider col)
     {
         return (captureLayers.value & (1 << col.gameObject.layer)) != 0;
+    }
+
+    bool IsSpeedEnough()
+    {
+        if (captureMinSpeed <= 0f) return true;
+        return Velocity.magnitude >= captureMinSpeed;
     }
 
     /// <summary>

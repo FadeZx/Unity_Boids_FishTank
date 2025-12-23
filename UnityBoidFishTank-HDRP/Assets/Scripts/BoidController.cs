@@ -17,6 +17,18 @@ using UnityEditor;
 [DefaultExecutionOrder(-50)]
 public class BoidController : MonoBehaviour
 {
+    [Header("Profile / Runtime Control")]
+    [Tooltip("ScriptableObject profile that stores boid settings (edit in Inspector like a particle system module).")]
+    public BoidSettingsProfile settingsProfile;
+    [Tooltip("Apply the profile values on start/play automatically.")]
+    public bool applyProfileOnStart = true;
+    [Tooltip("While playing, re-apply the profile whenever it changes in the Inspector.")]
+    public bool liveProfileSync = true;
+    [Tooltip("When play stops or this component disables, write current runtime values back into the profile.")]
+    public bool saveProfileOnStop = true;
+    [Tooltip("Keep the old OnGUI runtime panel visible (unchecked = inspector-only workflow).")]
+    public bool enableLegacyRuntimeUI = false;
+
     [Header("References")]
 
     [Tooltip("Tank area collider - boids will avoid spawning inside this area but use it for movement boundaries")]
@@ -89,6 +101,8 @@ public class BoidController : MonoBehaviour
 
     [HideInInspector] public List<BoidAgent> agents = new List<BoidAgent>();
 
+    int appliedProfileRevision = -1;
+
     // --- UI / persistence ---
     [Serializable]
     public class BoidSettings
@@ -140,13 +154,25 @@ public class BoidController : MonoBehaviour
             return;
         }
 
-        // Try auto-load from file (if exists), then PlayerPrefs
-        TryLoadFromFile();
+        bool usedProfile = false;
+        if (applyProfileOnStart && settingsProfile != null)
+        {
+            ApplyProfile(true);
+            usedProfile = true;
+        }
+
+        // Fallback to legacy persistence if no profile is assigned
+        if (!usedProfile)
+            TryLoadFromFile();
+
         if (agents.Count == 0) Spawn();
     }
 
     void Update()
     {
+        if (Application.isPlaying && liveProfileSync && settingsProfile != null && settingsProfile.Revision != appliedProfileRevision)
+            ApplyProfile(true);
+
         // Toggle panel collapse/expand with F1
         if (KeyDown_F1()) showPanel = !showPanel;
 
@@ -254,6 +280,12 @@ public class BoidController : MonoBehaviour
     void OnDestroy()
     {
         DisposeNative();
+    }
+
+    void OnDisable()
+    {
+        if (Application.isPlaying && saveProfileOnStop)
+            SaveProfileFromRuntime();
     }
 
     void DisposeNative()
@@ -739,6 +771,8 @@ public class BoidController : MonoBehaviour
     // ----------------- Runtime UI -----------------
     void OnGUI()
     {
+        if (!enableLegacyRuntimeUI) return;
+
         const float w = 320f;
         const float handleH = 22f;
         const float margin = 12f;
@@ -916,40 +950,45 @@ public class BoidController : MonoBehaviour
     }
 
     // ----------------- Persistence -----------------
-    BoidSettings Collect()
+    public void CopyToSettings(BoidSettings target)
     {
-        return new BoidSettings
-        {
-            boidCount = boidCount,
-        minSpeed = minSpeed,
-        maxSpeed = maxSpeed,
-        maxSpeedCap = maxSpeedCap,
-        maxSteerForce = maxSteerForce,
-        neighborRadius = neighborRadius,
-        separationRadius = separationRadius,
-        weightSeparation = weightSeparation,
-        weightAlignment = weightAlignment,
-            weightCohesion = weightCohesion,
-            weightBounds = weightBounds,
-            weightObstacleAvoid = weightObstacleAvoid,
-        avoidDistance = avoidDistance,
-        avoidProbeAngle = avoidProbeAngle,
-        predatorAvoidRadius = predatorAvoidRadius,
-        weightPredatorAvoid = weightPredatorAvoid,
-        predatorAvoidBoost = predatorAvoidBoost,
-        predatorPanicRadius = predatorPanicRadius,
-        predatorPanicSpeedMultiplier = predatorPanicSpeedMultiplier,
-        verticalSteerDamping = verticalSteerDamping,
-        spawnRadius = spawnRadius,
-        maxSpawnAttempts = maxSpawnAttempts,
-        cellSizeMultiplier = cellSizeMultiplier,
-        drawDebug = drawDebug,
-        debugDrawGrid = debugDrawGrid,
-        debugNeighborCounts = debugNeighborCounts
-    };
+        if (target == null) return;
+        target.boidCount = boidCount;
+        target.minSpeed = minSpeed;
+        target.maxSpeed = maxSpeed;
+        target.maxSpeedCap = maxSpeedCap;
+        target.maxSteerForce = maxSteerForce;
+        target.neighborRadius = neighborRadius;
+        target.separationRadius = separationRadius;
+        target.weightSeparation = weightSeparation;
+        target.weightAlignment = weightAlignment;
+        target.weightCohesion = weightCohesion;
+        target.weightBounds = weightBounds;
+        target.weightObstacleAvoid = weightObstacleAvoid;
+        target.avoidDistance = avoidDistance;
+        target.avoidProbeAngle = avoidProbeAngle;
+        target.predatorAvoidRadius = predatorAvoidRadius;
+        target.weightPredatorAvoid = weightPredatorAvoid;
+        target.predatorAvoidBoost = predatorAvoidBoost;
+        target.predatorPanicRadius = predatorPanicRadius;
+        target.predatorPanicSpeedMultiplier = predatorPanicSpeedMultiplier;
+        target.verticalSteerDamping = verticalSteerDamping;
+        target.spawnRadius = spawnRadius;
+        target.maxSpawnAttempts = maxSpawnAttempts;
+        target.cellSizeMultiplier = cellSizeMultiplier;
+        target.drawDebug = drawDebug;
+        target.debugDrawGrid = debugDrawGrid;
+        target.debugNeighborCounts = debugNeighborCounts;
     }
 
-    void Apply(BoidSettings s, bool respawnIfNeeded = true)
+    BoidSettings Collect()
+    {
+        var s = new BoidSettings();
+        CopyToSettings(s);
+        return s;
+    }
+
+    public void Apply(BoidSettings s, bool respawnIfNeeded = true)
     {
         if (s == null) return;
         bool needRespawn = s.boidCount != boidCount;
@@ -969,8 +1008,22 @@ public class BoidController : MonoBehaviour
         debugDrawGrid = s.debugDrawGrid;
         debugNeighborCounts = s.debugNeighborCounts;
         // obstacle avoidance is always on
-
         if (respawnIfNeeded && needRespawn) Respawn();
+        appliedProfileRevision = settingsProfile != null ? settingsProfile.Revision : appliedProfileRevision;
+    }
+
+    void ApplyProfile(bool respawnIfNeeded)
+    {
+        if (settingsProfile == null) return;
+        settingsProfile.ApplyTo(this, respawnIfNeeded);
+        appliedProfileRevision = settingsProfile.Revision;
+    }
+
+    void SaveProfileFromRuntime()
+    {
+        if (settingsProfile == null) return;
+        settingsProfile.CaptureFrom(this);
+        appliedProfileRevision = settingsProfile.Revision;
     }
 
     void SaveToFile()
