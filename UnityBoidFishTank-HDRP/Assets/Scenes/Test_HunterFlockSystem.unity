@@ -370,8 +370,8 @@ GameObject:
   - component: {fileID: 263552016}
   - component: {fileID: 263552015}
   - component: {fileID: 263552014}
-  - component: {fileID: 263552013}
   - component: {fileID: 263552017}
+  - component: {fileID: 263552013}
   m_Layer: 0
   m_Name: HuntingBoidSpawneer
   m_TagString: Untagged
@@ -489,36 +489,38 @@ MonoBehaviour:
   useHuntingArea: 0
   emission: 1
   spawnRadius: 4.29
-  spawnConeAngle: 25
-  spawnConeLength: 6
+  spawnConeAngle: 25.438705
+  spawnConeLength: 0.1
   spawnCenter: {fileID: 263552016}
   maxSpawnAttempts: 50
-  leaders: 1
-  flankers: 3
-  strikers: 2
-  supports: 2
-  minSpeed: 2.2
-  maxSpeed: 6
+  leaders: 2
+  flankers: 2
+  strikers: 4
+  supports: 3
+  minSpeed: 0.39
+  maxSpeed: 8.62223
   maxSteerForce: 10
-  neighborRadius: 3
-  separationRadius: 0.9
-  wSeparation: 1.3
-  wAlignment: 0.8
-  wCohesion: 0.8
-  wPursuit: 2
-  wEncircle: 2.2
-  wCorral: 1.6
-  encircleRadius: 4
-  flankOffsetAngle: 45
-  strikeRange: 3
-  strikeBoost: 1.6
-  strikeCooldown: 2.5
+  neighborRadius: 4.2800565
+  separationRadius: 1.59
+  wSeparation: 1.5
+  wAlignment: 7.33
+  wCohesion: 3.0430562
+  wPursuit: 1.8657103
+  wEncircle: 0.7993926
+  wCorral: 1.1924222
+  encircleRadius: 2.2196035
+  flankOffsetAngle: 36.244423
+  orbitHeightOffset: 3.22
+  wOrbitHeight: 0.6
+  strikeRange: 5.576084
+  strikeBoost: 3
+  strikeCooldown: 1.1441625
   obstacleMask:
     serializedVersion: 2
     m_Bits: 8
-  avoidDistance: 2.5
-  avoidDistanceCap: 0
-  avoidProbeAngle: 25
+  avoidDistance: 1.8585219
+  avoidDistanceCap: 0.4
+  avoidProbeAngle: 10.594228
   agentRadius: 0.25
   boundaryAvoidRadius: 1.2
   targetTag: Player
@@ -530,6 +532,8 @@ MonoBehaviour:
   showRoleText: 1
   labelCamera: {fileID: 396518016}
   captureCount: 0
+  showRuntimeUI: 0
+  saveSettingsOnPlay: 1
 --- !u!1 &396518014
 GameObject:
   m_ObjectHideFlags: 0
@@ -887,6 +891,7 @@ GameObject:
   - component: {fileID: 659122546}
   - component: {fileID: 659122545}
   - component: {fileID: 659122544}
+  - component: {fileID: 659122549}
   m_Layer: 0
   m_Name: Capsule
   m_TagString: Player
@@ -1013,6 +1018,21 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &659122549
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 659122543}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 20e0cf791269bad4887f5468fde65206, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::SimpleCharacterMover
+  moveSpeed: 5
+  gravity: -9.81
+  jumpForce: 5
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0

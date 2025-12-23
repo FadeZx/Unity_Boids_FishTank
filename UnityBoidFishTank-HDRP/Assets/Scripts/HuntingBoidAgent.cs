@@ -16,6 +16,15 @@ public class HuntingBoidAgent : MonoBehaviour
     float targetHoldTimer = 0f;
 
     public bool HasTarget => CurrentTarget != null;
+    [Header("Debug/Visual")]
+    [Tooltip("Optional renderer whose material color is tinted based on state.")]
+    public Renderer debugRenderer;
+    [Tooltip("Color when tracking a target.")]
+    public Color colorHasTarget = Color.blue;
+    [Tooltip("Color when striking.")]
+    public Color colorStriking = Color.red;
+    [Tooltip("Blend speed for debug color changes.")]
+    public float colorLerpSpeed = 6f;
 
     public void SetTarget(BoidAgent t)
     {
@@ -148,6 +157,8 @@ public class HuntingBoidAgent : MonoBehaviour
             }
             roleLabel.text = role.ToString();
         }
+
+        UpdateDebugColor(dt);
     }
 
     public bool CanStrike() => strikeCooldownTimer <= 0f;
@@ -168,6 +179,16 @@ public class HuntingBoidAgent : MonoBehaviour
             animator.SetBool(animEat, true);
             animator.SetTrigger(animAttack);
         }
+    }
+
+    void UpdateDebugColor(float dt)
+    {
+        if (debugRenderer == null) return;
+        Color targetColor = HasTarget ? colorHasTarget : debugRenderer.material.color;
+        if (strikeBoostTimer > 0f)
+            targetColor = colorStriking;
+        var mat = debugRenderer.material;
+        mat.color = Color.Lerp(mat.color, targetColor, 1f - Mathf.Exp(-colorLerpSpeed * dt));
     }
 
     void UpdateActionTimers(float dt)

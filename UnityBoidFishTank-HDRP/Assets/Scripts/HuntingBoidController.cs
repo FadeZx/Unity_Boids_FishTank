@@ -64,6 +64,10 @@ public class HuntingBoidController : MonoBehaviour
     [Header("Encirclement")]
     public float encircleRadius = 4.0f;
     public float flankOffsetAngle = 45f;
+    [Tooltip("Preferred offset above the target when orbiting (not striking).")]
+    public float orbitHeightOffset = 2.0f;
+    [Tooltip("How strongly to correct toward the orbit height while circling.")]
+    public float wOrbitHeight = 0.6f;
 
     [Header("Strike")]
     public float strikeRange = 3.0f;
@@ -106,6 +110,10 @@ public class HuntingBoidController : MonoBehaviour
     float panelAnim = 1f;
     float panelAnimVel = 0f;
     Vector2 scroll;
+    [Tooltip("Show legacy runtime UI (OnGUI). Leave off for build/game view.")]
+    public bool showRuntimeUI = false;
+    [Tooltip("Save settings automatically when play mode stops or object is destroyed.")]
+    public bool saveSettingsOnPlay = false;
     const string kPrefs = "HuntingBoids_Settings_JSON";
     string JsonPath => Path.Combine(Application.persistentDataPath, "hunting_boids_settings.json");
 
@@ -126,6 +134,8 @@ public class HuntingBoidController : MonoBehaviour
     void OnDestroy()
     {
         DisposeTargetGrid();
+        if (saveSettingsOnPlay && Application.isPlaying)
+            SaveToFile();
     }
 
     void Update()
@@ -388,53 +398,53 @@ public class HuntingBoidController : MonoBehaviour
         float tLead = Mathf.Clamp(dist / Mathf.Max(0.1f, maxSpeed + aimVel.magnitude), 0.1f, 2.0f);
         Vector3 intercept = aimCtr + aimVel * tLead;
 
-        switch (self.role)
+        // Opportunistic strike for any role
+        bool canStrikeNow = dist <= strikeRange && self.CanStrike();
+        if (canStrikeNow)
         {
-            case HunterRole.Leader:
-                f += wPursuit * (intercept - pos);
-                break;
-            case HunterRole.Flanker:
-                if (shareLeaderTarget)
-                {
-                    f += wEncircle * (intercept - pos);
-                }
-                else
-                {
-                    int index = IndexAmongRole(self, HunterRole.Flanker);
-                    float sign = (index % 2 == 0) ? 1f : -1f;
-                    float angle = flankOffsetAngle * (1 + index / 2);
-                    Quaternion q = Quaternion.AngleAxis(sign * angle, Vector3.up);
-                    Vector3 tangent = q * tgtDir;
-                    Vector3 ringTarget = tgtCtr + tangent.normalized * encircleRadius;
-                    f += wEncircle * (ringTarget - pos);
-                }
-                break;
-            case HunterRole.Striker:
-                if (dist <= strikeRange && self.CanStrike())
-                {
-                    Vector3 dash = (intercept - pos).normalized * (maxSpeed * strikeBoost);
-                    f += wPursuit * (dash - vel);
-                    self.NotifyStrikeBoost();
-                    self.ResetStrikeCooldown();
-                }
-                else
-                {
-                    Vector3 ringDir = Vector3.Cross(tgtDir, Vector3.up).normalized;
-                    Vector3 targetS = tgtCtr + ringDir * (encircleRadius * 0.7f);
-                    f += (wEncircle + 0.6f) * (targetS - pos);
-                }
-                break;
-            case HunterRole.Support:
-                if (shareLeaderTarget)
-                {
-                    f += wCorral * (intercept - pos);
-                }
-                else
-                {
-                    Vector3 behind = tgtCtr - tgtDir * (encircleRadius * 1.1f);
-                    f += wCorral * (behind - pos);
-                }
-                break;
+            Vector3 dash = (intercept - pos).normalized * (maxSpeed * strikeBoost);
+            float strikeWeight = (self.role == HunterRole.Striker) ? wPursuit * 1.2f : wPursuit * 0.9f;
+            f += strikeWeight * (dash - vel);
+            self.NotifyStrikeBoost();
+            self.ResetStrikeCooldown();
+        }
+        else
+        {
+            // Ring/orbit behavior
+            Vector3 up = Vector3.up;
+            Vector3 radial = (pos - aimCtr);
+            if (radial.sqrMagnitude < 0.01f) radial = Quaternion.AngleAxis(45f, up) * tgtDir * encircleRadius;
+            Vector3 tangent = Vector3.Cross(up, radial).normalized;
+
+            // Role-based ring offsets with staggering to keep the flock spread and moving in different arcs
+            int roleIdx = IndexAmongRole(self, self.role);
+            float staggerBase = 55f;
+            float stagger = ((roleIdx % 2 == 0) ? 1f : -1f) * staggerBase * (1 + roleIdx / 2f);
+            float roleOffset = self.role switch
+            {
+                HunterRole.Leader => 0f,
+                HunterRole.Flanker => flankOffsetAngle,
+                HunterRole.Support => -flankOffsetAngle,
+                HunterRole.Striker => flankOffsetAngle * 0.5f,
+                _ => 0f
+            };
+
+            float totalAngle = roleOffset + stagger;
+            Quaternion roleRot = Quaternion.AngleAxis(totalAngle, up);
+            Vector3 ringDir = roleRot * tangent;
+            Vector3 ringTarget = aimCtr + ringDir.normalized * encircleRadius;
+
+            Vector3 orbitPull = ringTarget - pos;
+            Vector3 orbitFlow = Vector3.Cross(up, (pos - aimCtr)).normalized * maxSpeed; // true tangential flow
+            // Keep a medium altitude relative to target
+            float desiredY = aimCtr.y + orbitHeightOffset;
+            Vector3 heightForce = new Vector3(0f, desiredY - pos.y, 0f);
+
+            float orbitWeight = (self.role == HunterRole.Leader) ? wEncircle * 0.8f : wEncircle;
+            f += orbitWeight * orbitPull
+               + wPursuit * 0.4f * (orbitFlow - vel)
+               + wPursuit * 0.25f * (intercept - pos)
+               + wOrbitHeight * heightForce;
         }
 
         if (f.sqrMagnitude > 1e-8f)
@@ -730,11 +740,13 @@ public class HuntingBoidController : MonoBehaviour
     // ---------------- Capture handling ----------------
     public void OnCapturedTarget(BoidAgent target)
     {
-        if (target == null) return;
-        if (target.controller != null)
-            target.controller.RemoveAgent(target);
-        else
-            Destroy(target.gameObject);
+        if (target != null)
+        {
+            if (target.controller != null)
+                target.controller.RemoveAgent(target);
+            else
+                Destroy(target.gameObject);
+        }
 
         captureCount++;
         RefreshTargetPool();
@@ -886,6 +898,7 @@ public class HuntingBoidController : MonoBehaviour
     }
     void OnGUI()
     {
+        if (!showRuntimeUI) return;
         const float w = 340f;
         const float handleH = 22f;
         const float margin = 12f;
