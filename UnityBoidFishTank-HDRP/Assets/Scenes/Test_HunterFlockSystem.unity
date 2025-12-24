@@ -605,7 +605,7 @@ MonoBehaviour:
   spawnInterval: 8
   respawnWhenEmpty: 1
   minSpeed: 0.2
-  maxSpeed: 7
+  maxSpeed: 9
   maxSteerForce: 6
   neighborRadius: 4.2800565
   separationRadius: 2.67
@@ -613,13 +613,17 @@ MonoBehaviour:
   wAlignment: 1.24
   wCohesion: 2.53
   targetTag: Player
+  targetLayers:
+    serializedVersion: 2
+    m_Bits: 4294967295
+  requireTargetTag: 0
   retargetInterval: 0.6
   wPursuit: 2.86
   strikeRange: 13
-  strikeBoost: 30
+  strikeBoost: 50
   strikeCooldown: 3
   strikeWindupTime: 1.5
-  strikeDashDistance: 30
+  strikeDashDistance: 40
   encircleRadius: 10
   blindspotDistance: 3.94
   blindspotSideJitter: 1.5
@@ -627,11 +631,15 @@ MonoBehaviour:
   obstacleMask:
     serializedVersion: 2
     m_Bits: 8
-  avoidDistance: 1.13
+  avoidDistance: 4.92
   avoidDistanceCap: 0.4
   avoidProbeAngle: 10.52
   agentRadius: 0.25
   boundaryAvoidRadius: 1.2
+  obstacleWeight: 0.92
+  obstacleWeightWhenStriking: 0.1
+  obstacleHighSpeed: 4.94
+  obstacleWeightAtHighSpeed: 0.2
   showRoleText: 1
   labelCamera: {fileID: 396518016}
 --- !u!1 &396518014

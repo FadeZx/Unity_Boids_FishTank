@@ -27,7 +27,7 @@ Transform:
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: 0, y: 0, z: 0}
-  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_LocalScale: {x: 1.9458, y: 1.9458, z: 1.9458}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 8768308298560906636}
@@ -66,6 +66,7 @@ GameObject:
   - component: {fileID: 2811771176798241493}
   - component: {fileID: 5044553961546944671}
   - component: {fileID: 6671329546458273997}
+  - component: {fileID: 8039056065845401747}
   m_Layer: 0
   m_Name: HuntingBoidAgent
   m_TagString: Untagged
@@ -194,7 +195,7 @@ MonoBehaviour:
   captureTrigger: {fileID: 719768267104187253}
   captureLayers:
     serializedVersion: 2
-    m_Bits: 4294967295
+    m_Bits: 8
   captureMinSpeed: 3
   OnCapture:
     m_PersistentCalls:
@@ -214,6 +215,33 @@ MonoBehaviour:
   animator: {fileID: 0}
   strikeBoostAnimDuration: 0.8
   eatDuration: 2
+--- !u!54 &8039056065845401747
+Rigidbody:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4075362852600480957}
+  serializedVersion: 5
+  m_Mass: 0.67
+  m_LinearDamping: 0
+  m_AngularDamping: 0.05
+  m_CenterOfMass: {x: 0, y: 0, z: 0}
+  m_InertiaTensor: {x: 1, y: 1, z: 1}
+  m_InertiaRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_IncludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_ExcludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_ImplicitCom: 1
+  m_ImplicitTensor: 1
+  m_UseGravity: 0
+  m_IsKinematic: 0
+  m_Interpolate: 0
+  m_Constraints: 0
+  m_CollisionDetection: 0
 --- !u!1 &7321529643532878318
 GameObject:
   m_ObjectHideFlags: 0

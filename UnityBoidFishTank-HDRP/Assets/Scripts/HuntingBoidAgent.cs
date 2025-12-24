@@ -314,7 +314,9 @@ public class HuntingBoidAgent : MonoBehaviour
 
     bool IsLayerAllowed(Collider col)
     {
-        return (captureLayers.value & (1 << col.gameObject.layer)) != 0;
+        int mask = captureLayers.value;
+        if (mask == 0) mask = ~0; // if not set in inspector, treat as Everything
+        return (mask & (1 << col.gameObject.layer)) != 0;
     }
 
     bool IsSpeedEnough()

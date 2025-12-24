@@ -35,6 +35,10 @@ public class HuntingBoidController : MonoBehaviour
     [Header("Hunt")]
     [Tooltip("Tag used to discover targets.")]
     public string targetTag = "Prey";
+    [Tooltip("Optional layer mask filter for targets (use Everything to allow any layer).")]
+    public LayerMask targetLayers = ~0;
+    [Tooltip("If true, targets must match the tag AND layer; if false, layer alone is sufficient.")]
+    public bool requireTargetTag = false;
     public float retargetInterval = 0.6f;
     public float wPursuit = 2.0f;
     public float strikeRange = 3.0f;
@@ -62,6 +66,14 @@ public class HuntingBoidController : MonoBehaviour
     public float agentRadius = 0.25f;
     [Tooltip("Distance from walls where hunters start steering away (soft boundary).")]
     public float boundaryAvoidRadius = 1.2f;
+    [Tooltip("Baseline weight for obstacle avoidance while hunting.")]
+    public float obstacleWeight = 1f;
+    [Tooltip("Weight for obstacle avoidance while striking (0 = ignore obstacles).")]
+    public float obstacleWeightWhenStriking = 0.1f;
+    [Tooltip("Speed above which obstacle avoidance weight is reduced toward obstacleWeightAtHighSpeed.")]
+    public float obstacleHighSpeed = 10f;
+    [Tooltip("Avoidance weight when speed is twice obstacleHighSpeed (blended).")]
+    public float obstacleWeightAtHighSpeed = 0.2f;
 
     [Header("Labels")]
     public bool showRoleText = true;
@@ -200,8 +212,24 @@ public class HuntingBoidController : MonoBehaviour
         Vector3 pursuit = PursuitForce(self, pos, vel);
         Vector3 obstacleAvoid = ObstacleAvoid(pos, vel);
         Vector3 boundaryAvoid = BoundaryAvoid(pos, vel);
-        // During strike dashes, skip obstacle avoidance so the dash isn't deflected; still allow boundary soft push.
-        Vector3 avoid = self.IsStrikingNow ? boundaryAvoid : (obstacleAvoid + boundaryAvoid);
+
+        // Scale obstacle avoidance based on strike/high-speed state
+        float avoidScale = obstacleWeight;
+        if (self.IsStrikingNow)
+        {
+            avoidScale = obstacleWeightWhenStriking;
+        }
+        else
+        {
+            float speed = vel.magnitude;
+            if (speed > obstacleHighSpeed)
+            {
+                float t = Mathf.Clamp01((speed - obstacleHighSpeed) / Mathf.Max(0.001f, obstacleHighSpeed));
+                avoidScale = Mathf.Lerp(obstacleWeight, obstacleWeightAtHighSpeed, t);
+            }
+        }
+
+        Vector3 avoid = obstacleAvoid * avoidScale + boundaryAvoid;
 
         // Hold/windup: stop flocking movement, just brake and avoid
         if (self.InStrikeWindup)
@@ -428,7 +456,9 @@ public class HuntingBoidController : MonoBehaviour
         var foundAgents = FindObjectsOfType<BoidAgent>(false);
         for (int i = 0; i < foundAgents.Length; i++)
         {
-            if (string.IsNullOrEmpty(targetTag) || foundAgents[i].CompareTag(targetTag))
+            if (!IsTargetLayerAllowed(foundAgents[i].gameObject.layer)) continue;
+            bool tagOk = string.IsNullOrEmpty(targetTag) || foundAgents[i].CompareTag(targetTag);
+            if (!requireTargetTag || tagOk)
                 targetPool.Add(foundAgents[i]);
         }
 
@@ -436,7 +466,10 @@ public class HuntingBoidController : MonoBehaviour
         if (targetPool.Count == 0)
         {
             for (int i = 0; i < foundAgents.Length; i++)
-                targetPool.Add(foundAgents[i]);
+            {
+                if (IsTargetLayerAllowed(foundAgents[i].gameObject.layer))
+                    targetPool.Add(foundAgents[i]);
+            }
         }
 
         // If still empty, attach passive BoidAgent components to tagged objects so they can be targeted.
@@ -447,6 +480,7 @@ public class HuntingBoidController : MonoBehaviour
             {
                 var go = taggedObjects[i];
                 if (go == null) continue;
+                if (!IsTargetLayerAllowed(go.layer)) continue;
                 var proxy = go.GetComponent<BoidAgent>();
                 if (proxy == null)
                     proxy = go.AddComponent<BoidAgent>(); // passive: controller stays null
@@ -465,6 +499,11 @@ public class HuntingBoidController : MonoBehaviour
                 Destroy(target.gameObject);
         }
         RefreshTargetPool();
+    }
+
+    bool IsTargetLayerAllowed(int layer)
+    {
+        return (targetLayers.value & (1 << layer)) != 0;
     }
 
     void OnDrawGizmos()
