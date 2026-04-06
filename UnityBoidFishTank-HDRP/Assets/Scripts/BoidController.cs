@@ -27,7 +27,7 @@ public class BoidController : MonoBehaviour
     [Tooltip("When play stops or this component disables, write current runtime values back into the profile.")]
     public bool saveProfileOnStop = true;
     [Tooltip("Keep the old OnGUI runtime panel visible (unchecked = inspector-only workflow).")]
-    public bool enableLegacyRuntimeUI = false;
+    public bool enableLegacyRuntimeUI = true;
 
     [Header("References")]
 
@@ -773,7 +773,7 @@ public class BoidController : MonoBehaviour
     {
         if (!enableLegacyRuntimeUI) return;
 
-        const float w = 320f;
+        const float w = 360f;
         const float handleH = 22f;
         const float margin = 12f;
 
@@ -806,63 +806,53 @@ public class BoidController : MonoBehaviour
 
         scroll = GUILayout.BeginScrollView(scroll);
 
-        // Counts
-        boidCount = IntSliderT("Boid Count", "Number of prey agents simulated (decreases on kills).", boidCount, 1, 2000);
+        SectionLabel("Population");
+        boidCount = IntSliderT("Boid Count", "Number of prey agents simulated (decreases on kills).", boidCount, 1, 2000, "fish");
         GUILayout.Label($"Current Count: <b>{agents.Count}</b>", new GUIStyle(GUI.skin.label) { richText = true });
+        if (GUILayout.Button("Respawn Now")) Respawn();
 
-        GUILayout.Space(6);
-        GUILayout.Label("<b>Spawning</b>", new GUIStyle(GUI.skin.label) { richText = true });
-        spawnRadius = SliderT("Spawn Radius", "Distance from tank center for spawning ring (gizmo shows exact radius).", spawnRadius, 0.5f, 100f);
-        maxSpawnAttempts = IntSliderT("Max Spawn Attempts", "Maximum attempts to find valid spawn position outside tank.", maxSpawnAttempts, 10, 200);
+        SectionLabel("Movement");
+        minSpeed = SliderT("Min Speed", "Minimum cruising speed (prevents stalling).", minSpeed, 0.1f, Mathf.Max(0.1f, maxSpeed), "u/s");
+        maxSpeed = SliderT("Max Speed", "Top speed for desired velocities.", maxSpeed, minSpeed, Mathf.Max(15f, minSpeed), "u/s");
+        if (maxSpeed < minSpeed) maxSpeed = minSpeed;
+        maxSpeedCap = SliderT("Max Speed Cap", "Absolute cap after boosts (0 = uncapped).", maxSpeedCap, 0f, 25f, maxSpeedCap <= 0f ? "off" : "u/s");
+        maxSteerForce = SliderT("Max Steer", "Upper limit on steering force to avoid jitter.", maxSteerForce, 0.1f, 20f, "force");
+        HelpText("Min Speed is clamped below Max Speed.");
 
-        // Speeds
-        minSpeed = SliderT("Min Speed", "Minimum cruising speed (prevents stalling).", minSpeed, 0.1f, maxSpeed);
-        maxSpeed = SliderT("Max Speed", "Top speed for desired velocities.", maxSpeed, minSpeed, 15f);
-        maxSpeedCap = SliderT("Max Speed Cap", "Absolute cap after boosts (0 = uncapped).", maxSpeedCap, 0f, 25f);
-        maxSteerForce = SliderT("Max Steer", "Upper limit on steering force to avoid jitter.", maxSteerForce, 0.1f, 20f);
+        SectionLabel("Flocking");
+        weightSeparation = WeightSliderT("Separation W", "Weight of separation (spread apart). Displayed 0-1, internally mapped to 0-10.", weightSeparation, 10f);
+        weightAlignment = WeightSliderT("Alignment W", "Weight of alignment (match headings). Displayed 0-1, internally mapped to 0-10.", weightAlignment, 10f);
+        weightCohesion = WeightSliderT("Cohesion W", "Weight of cohesion (stay together). Displayed 0-1, internally mapped to 0-10.", weightCohesion, 10f);
+        neighborRadius = SliderT("Neighbor Radius", "How far neighbors influence alignment/cohesion.", neighborRadius, 0.1f, 10f, "units");
+        separationRadius = SliderT("Separation Radius", "Distance where strong separation pushes away.", separationRadius, 0.05f, neighborRadius, "units");
+        if (separationRadius > neighborRadius) separationRadius = neighborRadius;
+        HelpText("Separation Radius is clamped to Neighbor Radius.");
 
-        GUILayout.Space(6);
+        SectionLabel("Environment");
+        weightBounds = WeightSliderT("Bounds W", "Weight of staying inside the tank volume. Displayed 0-1, internally mapped to 0-10.", weightBounds, 10f);
+        weightObstacleAvoid = WeightSliderT("Obstacle W", "Weight of steering away from obstacles. Displayed 0-1, internally mapped to 0-10.", weightObstacleAvoid, 10f);
+        avoidDistance = SliderT("Avoid Distance", "Forward probe length for obstacle detection.", avoidDistance, 0.1f, 10f, "units");
+        avoidProbeAngle = SliderT("Avoid Angle", "Side feeler spread angle for obstacle sensing.", avoidProbeAngle, 0f, 85f, "deg");
+        spawnRadius = SliderT("Spawn Radius", "Distance from tank center for spawning ring (gizmo shows exact radius).", spawnRadius, 0.5f, 100f, "units");
+        maxSpawnAttempts = IntSliderT("Spawn Attempts", "Maximum attempts to find valid spawn position outside tank.", maxSpawnAttempts, 10, 200, "attempts");
 
-        // Neighborhood
-        neighborRadius = SliderT("Neighbor Radius", "How far neighbors influence alignment/cohesion.", neighborRadius, 0.1f, 10f);
-        separationRadius = SliderT("Separation Radius", "Distance where strong separation pushes away.", separationRadius, 0.05f, neighborRadius);
+        SectionLabel("Predator Response");
+        weightPredatorAvoid = WeightSliderT("Predator W", "Strength of fleeing response from orcas. Displayed 0-1, internally mapped to 0-10.", weightPredatorAvoid, 10f);
+        predatorAvoidRadius = SliderT("Predator Radius", "Distance within which prey react to orcas.", predatorAvoidRadius, 0.5f, 10f, "units");
+        predatorPanicRadius = SliderT("Panic Radius", "Within this distance, boost predator avoidance.", predatorPanicRadius, 0.2f, predatorAvoidRadius, "units");
+        if (predatorPanicRadius > predatorAvoidRadius) predatorPanicRadius = predatorAvoidRadius;
+        predatorAvoidBoost = SliderT("Panic Boost", "Multiplier for predator avoidance inside Panic Radius.", predatorAvoidBoost, 1f, 5f, "x");
+        predatorPanicSpeedMultiplier = SliderT("Panic Speed x", "Speed multiplier applied while panicking near an orca.", predatorPanicSpeedMultiplier, 1f, 3f, "x");
+        HelpText("Panic Radius is clamped to Predator Radius.");
 
-        GUILayout.Space(6);
+        SectionLabel("Vertical Control");
+        verticalSteerDamping = PercentSliderT("Vertical Damping", "Scale for up/down steering vs left/right.", verticalSteerDamping, 0.1f, 1f);
 
-        // Weights
-        weightSeparation = SliderT("W Separation", "Weight of separation (spread apart).", weightSeparation, 0f, 10f);
-        weightAlignment = SliderT("W Alignment", "Weight of alignment (match headings).", weightAlignment, 0f, 10f);
-        weightCohesion = SliderT("W Cohesion", "Weight of cohesion (stay together).", weightCohesion, 0f, 10f);
-        weightBounds = SliderT("W Bounds", "Weight of staying inside the tank volume.", weightBounds, 0f, 10f);
-        weightObstacleAvoid = SliderT("W Obstacle", "Weight of steering away from obstacles.", weightObstacleAvoid, 0f, 10f);
-
-        GUILayout.Space(6);
-
-        // Avoidance
-        avoidDistance = SliderT("Avoid Distance", "Forward probe length for obstacle detection.", avoidDistance, 0.1f, 10f);
-        avoidProbeAngle = SliderT("Avoid Angle", "Side feeler spread angle for obstacle sensing.", avoidProbeAngle, 0f, 85f);
-
-        GUILayout.Space(6);
-
-        // Predator
-        GUILayout.Label("<b>Predator</b>", new GUIStyle(GUI.skin.label) { richText = true });
-        predatorAvoidRadius = SliderT("Predator Radius", "Distance within which prey react to orcas.", predatorAvoidRadius, 0.5f, 10f);
-        weightPredatorAvoid = SliderT("W Predator", "Strength of fleeing response from orcas.", weightPredatorAvoid, 0f, 10f);
-        predatorPanicRadius = SliderT("Panic Radius", "Within this distance, boost predator avoidance.", predatorPanicRadius, 0.2f, 5f);
-        predatorAvoidBoost = SliderT("Panic Boost", "Multiplier for predator avoidance inside Panic Radius.", predatorAvoidBoost, 1f, 5f);
-        predatorPanicSpeedMultiplier = SliderT("Panic Speed x", "Speed multiplier applied while panicking near an orca.", predatorPanicSpeedMultiplier, 1f, 3f);
-
-        GUILayout.Space(6);
-        GUILayout.Label("<b>Vertical Steering</b>", new GUIStyle(GUI.skin.label) { richText = true });
-        verticalSteerDamping = SliderT("Vertical Damping", "Scale for up/down steering vs left/right (<1 = harder to steer vertically).", verticalSteerDamping, 0.1f, 1f);
-
-        // Debug
-        GUILayout.Label("<b>Debug</b>", new GUIStyle(GUI.skin.label) { richText = true });
+        SectionLabel("Debug & Presets");
         drawDebug = ToggleT("Draw Forces", "Render per-boid debug force vectors.", drawDebug);
         debugDrawGrid = ToggleT("Draw Grid", "Visualize spatial hash cells occupied by boids (play mode).", debugDrawGrid);
         debugNeighborCounts = ToggleT("Neighbor Counts", "Show neighbor counts above boids (play mode).", debugNeighborCounts);
 
-        GUILayout.Space(10);
         GUILayout.Label($"Save Path:\n<size=10>{Application.persistentDataPath}</size>", new GUIStyle(GUI.skin.label) { richText = true, wordWrap = true });
 
         GUILayout.Space(6);
@@ -875,8 +865,6 @@ public class BoidController : MonoBehaviour
         if (GUILayout.Button("Save → PlayerPrefs")) SaveToPrefs();
         if (GUILayout.Button("Load ← PlayerPrefs")) LoadFromPrefs();
         GUILayout.EndHorizontal();
-
-        if (GUILayout.Button("Respawn Now")) Respawn();
 
         GUILayout.EndScrollView();
 
@@ -922,21 +910,33 @@ public class BoidController : MonoBehaviour
     }
 
     // Tooltip-aware helpers
-    float SliderT(string label, string tooltip, float v, float min, float max)
+    void SectionLabel(string label)
+    {
+        GUILayout.Space(8);
+        GUILayout.Label($"<b>{label}</b>", new GUIStyle(GUI.skin.label) { richText = true });
+    }
+
+    void HelpText(string text)
+    {
+        GUILayout.Label(text, new GUIStyle(GUI.skin.label) { fontSize = 10, wordWrap = true });
+    }
+
+    float SliderT(string label, string tooltip, float v, float min, float max, string suffix = "")
     {
         GUILayout.BeginHorizontal();
         GUILayout.Label(new GUIContent(label, tooltip), GUILayout.Width(130));
         v = GUILayout.HorizontalSlider(v, min, max);
-        GUILayout.Label(v.ToString("0.00"), GUILayout.Width(48));
+        string display = suffix == "off" ? "off" : string.IsNullOrEmpty(suffix) ? v.ToString("0.00") : $"{v:0.00} {suffix}";
+        GUILayout.Label(display, GUILayout.Width(80));
         GUILayout.EndHorizontal();
         return v;
     }
-    int IntSliderT(string label, string tooltip, int v, int min, int max)
+    int IntSliderT(string label, string tooltip, int v, int min, int max, string suffix = "")
     {
         GUILayout.BeginHorizontal();
         GUILayout.Label(new GUIContent(label, tooltip), GUILayout.Width(130));
         v = (int)GUILayout.HorizontalSlider(v, min, max);
-        GUILayout.Label(v.ToString(), GUILayout.Width(48));
+        GUILayout.Label(string.IsNullOrEmpty(suffix) ? v.ToString() : $"{v} {suffix}", GUILayout.Width(80));
         GUILayout.EndHorizontal();
         return Mathf.Clamp(v, min, max);
     }
@@ -947,6 +947,23 @@ public class BoidController : MonoBehaviour
         GUILayout.Label(new GUIContent(label, tooltip));
         GUILayout.EndHorizontal();
         return t;
+    }
+
+    float WeightSliderT(string label, string tooltip, float value, float internalMax)
+    {
+        float normalized = internalMax <= 0f ? 0f : Mathf.Clamp01(value / internalMax);
+        normalized = SliderT(label, tooltip, normalized, 0f, 1f);
+        return normalized * internalMax;
+    }
+
+    float PercentSliderT(string label, string tooltip, float value, float min, float max)
+    {
+        GUILayout.BeginHorizontal();
+        GUILayout.Label(new GUIContent(label, tooltip), GUILayout.Width(130));
+        value = GUILayout.HorizontalSlider(value, min, max);
+        GUILayout.Label($"{Mathf.RoundToInt(value * 100f)}%", GUILayout.Width(80));
+        GUILayout.EndHorizontal();
+        return Mathf.Clamp(value, min, max);
     }
 
     // ----------------- Persistence -----------------

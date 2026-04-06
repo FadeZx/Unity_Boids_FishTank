@@ -1,0 +1,174 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!1 &3536972807769912608
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 4233343231438631321}
+  - component: {fileID: 9038190339348795074}
+  - component: {fileID: 7629905240511840824}
+  - component: {fileID: 2858645138424745522}
+  - component: {fileID: 8168034931938980911}
+  m_Layer: 0
+  m_Name: HuntingBoidSpawner
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &4233343231438631321
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3536972807769912608}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: -8.02, y: 0.54, z: -0.35746}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!33 &9038190339348795074
+MeshFilter:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3536972807769912608}
+  m_Mesh: {fileID: 10202, guid: 0000000000000000e000000000000000, type: 0}
+--- !u!23 &7629905240511840824
+MeshRenderer:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3536972807769912608}
+  m_Enabled: 1
+  m_CastShadows: 1
+  m_ReceiveShadows: 1
+  m_DynamicOccludee: 1
+  m_StaticShadowCaster: 0
+  m_MotionVectors: 1
+  m_LightProbeUsage: 1
+  m_ReflectionProbeUsage: 1
+  m_RayTracingMode: 2
+  m_RayTraceProcedural: 0
+  m_RayTracingAccelStructBuildFlagsOverride: 0
+  m_RayTracingAccelStructBuildFlags: 1
+  m_SmallMeshCulling: 1
+  m_ForceMeshLod: -1
+  m_MeshLodSelectionBias: 0
+  m_RenderingLayerMask: 1
+  m_RendererPriority: 0
+  m_Materials:
+  - {fileID: 8554655104631171556, guid: 48c31786dff73fd4cb93bb13f0fae4bf, type: 3}
+  m_StaticBatchInfo:
+    firstSubMesh: 0
+    subMeshCount: 0
+  m_StaticBatchRoot: {fileID: 0}
+  m_ProbeAnchor: {fileID: 0}
+  m_LightProbeVolumeOverride: {fileID: 0}
+  m_ScaleInLightmap: 1
+  m_ReceiveGI: 1
+  m_PreserveUVs: 0
+  m_IgnoreNormalsForChartDetection: 0
+  m_ImportantGI: 0
+  m_StitchLightmapSeams: 1
+  m_SelectedEditorRenderState: 3
+  m_MinimumChartSize: 4
+  m_AutoUVMaxDistance: 0.5
+  m_AutoUVMaxAngle: 89
+  m_LightmapParameters: {fileID: 0}
+  m_GlobalIlluminationMeshLod: 0
+  m_SortingLayerID: 0
+  m_SortingLayer: 0
+  m_SortingOrder: 0
+  m_AdditionalVertexStreams: {fileID: 0}
+--- !u!114 &2858645138424745522
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3536972807769912608}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 0a49485a35786fe41b5c8a161a368394, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::HuntingBoidController
+  huntingArea: {fileID: 0}
+  hunterPrefab: {fileID: 6671329546458273997, guid: c91d324a1442bdc49bb98e79355db99e, type: 3}
+  spawnOnStart: 1
+  spawnCount: 5
+  spawnRadius: 4.29
+  useHuntingArea: 0
+  spawnCenter: {fileID: 4233343231438631321}
+  spawnOnInterval: 0
+  spawnInterval: 8
+  respawnWhenEmpty: 1
+  minSpeed: 0.2
+  maxSpeed: 9
+  maxSteerForce: 6
+  neighborRadius: 4.2800565
+  separationRadius: 2.67
+  wSeparation: 3.55
+  wAlignment: 1.24
+  wCohesion: 2.53
+  targetTag: Player
+  targetLayers:
+    serializedVersion: 2
+    m_Bits: 4294967295
+  requireTargetTag: 0
+  retargetInterval: 0.6
+  wPursuit: 2.86
+  strikeRange: 13
+  strikeBoost: 50
+  strikeCooldown: 3
+  strikeWindupTime: 1.5
+  strikeDashDistance: 40
+  encircleRadius: 10
+  blindspotDistance: 3.94
+  blindspotSideJitter: 1.5
+  strikeApproachRange: 5
+  obstacleMask:
+    serializedVersion: 2
+    m_Bits: 8
+  avoidDistance: 4.92
+  avoidDistanceCap: 0.4
+  avoidProbeAngle: 10.52
+  agentRadius: 0.25
+  boundaryAvoidRadius: 1.2
+  obstacleWeight: 0.92
+  obstacleWeightWhenStriking: 0.1
+  obstacleHighSpeed: 4.94
+  obstacleWeightAtHighSpeed: 0.2
+  showRoleText: 1
+  labelCamera: {fileID: 0}
+--- !u!65 &8168034931938980911
+BoxCollider:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3536972807769912608}
+  m_Material: {fileID: 0}
+  m_IncludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_ExcludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_LayerOverridePriority: 0
+  m_IsTrigger: 0
+  m_ProvidesContacts: 0
+  m_Enabled: 1
+  serializedVersion: 3
+  m_Size: {x: 1, y: 1, z: 1}
+  m_Center: {x: 0, y: 0, z: 0}

@@ -814,7 +814,7 @@ public class OrcaController : MonoBehaviour
 
     void OnGUI()
     {
-        const float w = 340f;
+        const float w = 380f;
         const float handleH = 22f;
         const float margin = 12f;
 
@@ -843,69 +843,71 @@ public class OrcaController : MonoBehaviour
 
         scroll = GUILayout.BeginScrollView(scroll);
 
-        GUILayout.Label("<b>Roles</b>", new GUIStyle(GUI.skin.label) { richText = true });
-        leaders = IntSliderT("Leaders", "Number of leaders (strong pursuit toward intercept).", leaders, 1, 4);
-        flankers = IntSliderT("Flankers", "Orcas that orbit prey on a ring to constrain it.", flankers, 0, 16);
-        strikers = IntSliderT("Strikers", "Orcas that dash in to strike when close.", strikers, 0, 16);
-        supports = IntSliderT("Supports", "Orcas that stay behind prey to corral it.", supports, 0, 16);
+        SectionLabel("Pod Setup");
+        leaders = IntSliderT("Leaders", "Number of leaders (strong pursuit toward intercept).", leaders, 1, 4, "orcas");
+        flankers = IntSliderT("Flankers", "Orcas that orbit prey on a ring to constrain it.", flankers, 0, 16, "orcas");
+        strikers = IntSliderT("Strikers", "Orcas that dash in to strike when close.", strikers, 0, 16, "orcas");
+        supports = IntSliderT("Supports", "Orcas that stay behind prey to corral it.", supports, 0, 16, "orcas");
         if (GUILayout.Button("Respawn Pod")) SpawnPod();
 
-        GUILayout.Space(6);
-        GUILayout.Label("<b>Spawning</b>", new GUIStyle(GUI.skin.label) { richText = true });
-        spawnRadius = SliderT("Spawn Radius", "Distance from tank center for spawning ring (gizmo shows exact radius).", spawnRadius, 1f, 100f);
-        maxSpawnAttempts = IntSliderT("Max Spawn Attempts", "Maximum attempts to find valid spawn position outside tank.", maxSpawnAttempts, 10, 200);
+        SectionLabel("Movement");
+        minSpeed = SliderT("Min Speed", "Minimum cruising speed. Prevents orcas from stalling.", minSpeed, 0.1f, Mathf.Max(0.1f, maxSpeed), "u/s");
+        maxSpeed = SliderT("Max Speed", "Top speed used for desired velocities and dashes.", maxSpeed, minSpeed, Mathf.Max(20f, minSpeed), "u/s");
+        if (maxSpeed < minSpeed) maxSpeed = minSpeed;
+        maxSteerForce = SliderT("Max Steer", "Upper limit on steering force to avoid jitter.", maxSteerForce, 0.1f, 30f, "force");
+        wDepth = WeightSliderT("Depth W", "Weight to keep near preferred depth. Displayed 0-1, internally mapped to 0-5.", wDepth, 5f);
+        depthCenterBias = PercentSliderT("Depth Center", "Preferred vertical center in tank (0=bottom, 1=surface).", depthCenterBias, 0f, 1f);
+        depthFollowPrey = PercentSliderT("Follow Prey Y", "Blend toward prey height: 0 = ignore prey height, 1 = match prey height.", depthFollowPrey, 0f, 1f);
+        HelpText("Min Speed is clamped below Max Speed.");
 
-        GUILayout.Space(6);
-        GUILayout.Label("<b>Speeds</b>");
-        minSpeed = SliderT("Min Speed", "Minimum cruising speed. Prevents orcas from stalling.", minSpeed, 0.1f, maxSpeed);
-        maxSpeed = SliderT("Max Speed", "Top speed used for desired velocities and dashes.", maxSpeed, minSpeed, 20f);
-        maxSteerForce = SliderT("Max Steer", "Upper limit on steering force to avoid jitter.", maxSteerForce, 0.1f, 30f);
+        SectionLabel("Pod Flocking");
+        wSeparation = WeightSliderT("Separation W", "Weight of separation (spread apart). Displayed 0-1, internally mapped to 0-10.", wSeparation, 10f);
+        wAlignment = WeightSliderT("Alignment W", "Weight of alignment (match headings). Displayed 0-1, internally mapped to 0-10.", wAlignment, 10f);
+        wCohesion = WeightSliderT("Cohesion W", "Weight of cohesion (stay together). Displayed 0-1, internally mapped to 0-10.", wCohesion, 10f);
+        neighborRadius = SliderT("Neighbor Radius", "How far pod-mates influence alignment/cohesion.", neighborRadius, 0.1f, 10f, "units");
+        separationRadius = SliderT("Separation Radius", "Distance where strong separation kicks in.", separationRadius, 0.05f, 20f, "units");
+        if (separationRadius > neighborRadius)
+            WarningText("Separation Radius is larger than Neighbor Radius; pod spacing can overpower cohesion.");
 
-        GUILayout.Space(6);
-        GUILayout.Label("<b>Pod Rules</b>");
-        neighborRadius = SliderT("Neighbor Radius", "How far pod-mates influence alignment/cohesion.", neighborRadius, 0.1f, 10f);
-        // Lift cap: allow separation radius beyond neighbor radius
-        separationRadius = SliderT("Separation Radius", "Distance where strong separation kicks in.", separationRadius, 0.05f, 20f);
-        wSeparation = SliderT("W Separation", "Weight of separation (spread apart).", wSeparation, 0f, 10f);
-        wAlignment = SliderT("W Alignment", "Weight of alignment (match headings).", wAlignment, 0f, 10f);
-        wCohesion = SliderT("W Cohesion", "Weight of cohesion (stay together).", wCohesion, 0f, 10f);
+        SectionLabel("Hunting");
+        wPursuit = WeightSliderT("Pursuit W", "Pursuit strength (leaders/strikers aim at an intercept). Displayed 0-1, internally mapped to 0-10.", wPursuit, 10f);
+        wEncircle = WeightSliderT("Encircle W", "Flankers circle radius pull. Displayed 0-1, internally mapped to 0-10.", wEncircle, 10f);
+        wCorral = WeightSliderT("Corral W", "Support tries to stay behind prey to herd it. Displayed 0-1, internally mapped to 0-10.", wCorral, 10f);
+        encircleRadius = SliderT("Encircle Radius", "Ring radius used for encirclement around prey.", encircleRadius, 0.5f, 20f, "units");
+        flankOffsetAngle = SliderT("Flank Angle", "Spacing angle offsets around the ring for flankers.", flankOffsetAngle, 0f, 160f, "deg");
+        shareLeaderTarget = ToggleT("Share Leader Target", "Force all roles to share Leader's target.", shareLeaderTarget);
 
-        GUILayout.Space(6);
-        GUILayout.Label("<b>Hunt</b>");
-        wPursuit = SliderT("W Pursuit", "Pursuit strength (leaders/strikers aim at an intercept).", wPursuit, 0f, 10f);
-        wEncircle = SliderT("W Encircle", "Flankers circle radius pull (ring around prey).", wEncircle, 0f, 10f);
-        wCorral = SliderT("W Corral", "Support tries to stay behind prey to herd it.", wCorral, 0f, 10f);
-        encircleRadius = SliderT("Encircle Radius", "Ring radius used for encirclement around prey.", encircleRadius, 0.5f, 20f);
-        flankOffsetAngle = SliderT("Flank Angle", "Spacing angle offsets around the ring for flankers.", flankOffsetAngle, 0f, 160f);
-        strikeRange = SliderT("Strike Range", "Distance threshold to trigger a strike dash.", strikeRange, 0.5f, 10f);
-        strikeBoost = SliderT("Strike Boost", "Speed multiplier during strike dashes.", strikeBoost, 1f, 3f);
-        strikeCooldown = SliderT("Strike Cooldown", "Cooldown between strikes for each striker.", strikeCooldown, 0f, 8f);
+        SectionLabel("Strike");
+        strikeRange = SliderT("Strike Range", "Distance threshold to trigger a strike dash.", strikeRange, 0.5f, 10f, "units");
+        strikeBoost = SliderT("Strike Boost", "Speed multiplier during strike dashes.", strikeBoost, 1f, 3f, "x");
+        strikeCooldown = SliderT("Strike Cooldown", "Cooldown between strikes for each striker.", strikeCooldown, 0f, 8f, "sec");
+        if (strikeRange > encircleRadius)
+            WarningText("Strike Range is larger than Encircle Radius; strikers will engage very early.");
 
-        GUILayout.Space(6);
-        GUILayout.Label("<b>Obstacles</b>");
-        avoidDistance = SliderT("Avoid Dist", "Forward probe length for obstacle detection.", avoidDistance, 0.2f, 15f);
-        avoidDistanceCap = SliderT("Avoid Dist Cap", "Optional max probe length (0 = uncapped).", avoidDistanceCap, 0f, 30f);
-        avoidProbeAngle = SliderT("Avoid Angle", "Side probe spread to feel around obstacles.", avoidProbeAngle, 0f, 85f);
-        orcaRadius = SliderT("Orca Radius", "Radius used for sweeps and spherecasts.", orcaRadius, 0.05f, 3f);
+        SectionLabel("Targeting");
+        retargetInterval = SliderT("Retarget", "How often to re-evaluate prey targets per orca.", retargetInterval, 0.1f, 5f, "sec");
+        maxOrcasPerPrey = IntSliderT("Max Per Prey", "Max number of orcas allowed to focus the same prey.", maxOrcasPerPrey, 1, 16, "orcas");
+        wTargetDistance = WeightSliderT("Distance Bias", "Bias toward closer prey. Displayed 0-1, internally mapped to 0-10.", wTargetDistance, 10f);
+        wTargetIsolation = WeightSliderT("Isolation Bias", "Bias toward isolated prey. Displayed 0-1, internally mapped to 0-10.", wTargetIsolation, 10f);
 
-        GUILayout.Space(6);
-        GUILayout.Label("<b>Hunt Stats</b>");
+        SectionLabel("Environment");
+        spawnRadius = SliderT("Spawn Radius", "Distance from tank center for spawning ring (gizmo shows exact radius).", spawnRadius, 1f, 100f, "units");
+        maxSpawnAttempts = IntSliderT("Spawn Attempts", "Maximum attempts to find valid spawn position outside tank.", maxSpawnAttempts, 10, 200, "attempts");
+        avoidDistance = SliderT("Avoid Dist", "Forward probe length for obstacle detection.", avoidDistance, 0.2f, 15f, "units");
+        avoidDistanceCap = SliderT("Avoid Dist Cap", "Optional max probe length (0 = uncapped).", avoidDistanceCap, 0f, 30f, avoidDistanceCap <= 0f ? "off" : "units");
+        HelpText("Avoid Dist Cap at 0 means uncapped.");
+        avoidProbeAngle = SliderT("Avoid Angle", "Side probe spread to feel around obstacles.", avoidProbeAngle, 0f, 85f, "deg");
+        orcaRadius = SliderT("Orca Radius", "Radius used for sweeps and spherecasts.", orcaRadius, 0.05f, 3f, "units");
+        boundaryAvoidRadius = SliderT("Boundary Radius", "Distance from walls where orcas start steering away.", boundaryAvoidRadius, 0.1f, 10f, "units");
+
+        SectionLabel("Camera / Labels / Stats");
+        showRoleText = ToggleT("Show Role Text", "Show text labels above each orca indicating its role.", showRoleText);
         GUILayout.Label($"Kill Count: <b>{killCount}</b>", new GUIStyle(GUI.skin.label) { richText = true });
         if (GUILayout.Button("Reset Kill Count")) killCount = 0;
 
-        GUILayout.Space(6);
-        GUILayout.Label("<b>Swimming</b>");
-        wDepth = SliderT("W Depth", "Weight to keep near preferred depth (blended with prey height).", wDepth, 0f, 5f);
-        depthCenterBias = SliderT("Depth Center Bias", "Preferred vertical center in tank (0=bottom, 1=surface).", depthCenterBias, 0f, 1f);
-        depthFollowPrey = SliderT("Depth Follow Prey", "Blend toward prey height for more natural pursuit.", depthFollowPrey, 0f, 1f);
-
-        GUILayout.Space(6);
-        GUILayout.Label("<b>Labels</b>");
-        showRoleText = ToggleT("Show Role Text", "Show text labels above each orca indicating its role.", showRoleText);
-
         cameraController?.DrawCameraUI(pod);
 
-        GUILayout.Space(6);
+        SectionLabel("Presets");
         GUILayout.BeginHorizontal();
         if (GUILayout.Button("Save → File")) SaveToFile();
         if (GUILayout.Button("Load ← File")) LoadFromFile();
@@ -959,21 +961,40 @@ public class OrcaController : MonoBehaviour
     }
 
     // Tooltip-aware helpers
-    float SliderT(string label, string tooltip, float v, float min, float max)
+    void SectionLabel(string label)
+    {
+        GUILayout.Space(8);
+        GUILayout.Label($"<b>{label}</b>", new GUIStyle(GUI.skin.label) { richText = true });
+    }
+
+    void HelpText(string text)
+    {
+        GUILayout.Label(text, new GUIStyle(GUI.skin.label) { fontSize = 10, wordWrap = true });
+    }
+
+    void WarningText(string text)
+    {
+        var style = new GUIStyle(GUI.skin.label) { fontSize = 10, wordWrap = true };
+        style.normal.textColor = Color.yellow;
+        GUILayout.Label(text, style);
+    }
+
+    float SliderT(string label, string tooltip, float v, float min, float max, string suffix = "")
     {
         GUILayout.BeginHorizontal();
         GUILayout.Label(new GUIContent(label, tooltip), GUILayout.Width(140));
         v = GUILayout.HorizontalSlider(v, min, max);
-        GUILayout.Label(v.ToString("0.00"), GUILayout.Width(50));
+        string display = suffix == "off" ? "off" : string.IsNullOrEmpty(suffix) ? v.ToString("0.00") : $"{v:0.00} {suffix}";
+        GUILayout.Label(display, GUILayout.Width(90));
         GUILayout.EndHorizontal();
         return v;
     }
-    int IntSliderT(string label, string tooltip, int v, int min, int max)
+    int IntSliderT(string label, string tooltip, int v, int min, int max, string suffix = "")
     {
         GUILayout.BeginHorizontal();
         GUILayout.Label(new GUIContent(label, tooltip), GUILayout.Width(140));
         v = (int)GUILayout.HorizontalSlider(v, min, max);
-        GUILayout.Label(v.ToString(), GUILayout.Width(50));
+        GUILayout.Label(string.IsNullOrEmpty(suffix) ? v.ToString() : $"{v} {suffix}", GUILayout.Width(90));
         GUILayout.EndHorizontal();
         return Mathf.Clamp(v, min, max);
     }
@@ -984,6 +1005,23 @@ public class OrcaController : MonoBehaviour
         GUILayout.Label(new GUIContent(label, tooltip));
         GUILayout.EndHorizontal();
         return t;
+    }
+
+    float WeightSliderT(string label, string tooltip, float value, float internalMax)
+    {
+        float normalized = internalMax <= 0f ? 0f : Mathf.Clamp01(value / internalMax);
+        normalized = SliderT(label, tooltip, normalized, 0f, 1f);
+        return normalized * internalMax;
+    }
+
+    float PercentSliderT(string label, string tooltip, float value, float min, float max)
+    {
+        GUILayout.BeginHorizontal();
+        GUILayout.Label(new GUIContent(label, tooltip), GUILayout.Width(140));
+        value = GUILayout.HorizontalSlider(value, min, max);
+        GUILayout.Label($"{Mathf.RoundToInt(value * 100f)}%", GUILayout.Width(90));
+        GUILayout.EndHorizontal();
+        return Mathf.Clamp(value, min, max);
     }
 
     // --- Validation for real-time gizmo updates ---

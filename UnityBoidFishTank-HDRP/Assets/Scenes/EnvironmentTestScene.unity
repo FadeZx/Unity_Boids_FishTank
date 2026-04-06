@@ -1030,7 +1030,7 @@ MonoBehaviour:
     LookAtTarget: {fileID: 0}
     CustomLookAtTarget: 0
   Lens:
-    FieldOfView: 100
+    FieldOfView: 99.20001
     OrthographicSize: 5
     NearClipPlane: 0.3
     FarClipPlane: 1000
@@ -1404,8 +1404,8 @@ BoxCollider:
   m_ProvidesContacts: 0
   m_Enabled: 1
   serializedVersion: 3
-  m_Size: {x: 0.5165097, y: 0.17285638, z: 0.9667534}
-  m_Center: {x: 0.114768706, y: -0.011604241, z: -0.09080597}
+  m_Size: {x: 0.35066554, y: 0.17285638, z: 0.9667534}
+  m_Center: {x: 0.19769104, y: -0.011604241, z: -0.090806}
 --- !u!4 &150923641
 Transform:
   m_ObjectHideFlags: 0
@@ -2597,6 +2597,7 @@ MonoBehaviour:
     serializedVersion: 2
     m_Bits: 72
   avoidDistance: 2.5
+  avoidDistanceCap: 0
   avoidProbeAngle: 25
   orcaRadius: 3
   boundaryAvoidRadius: 1.2
@@ -3850,7 +3851,7 @@ Light:
   m_LightShadowCasterMode: 2
   m_AreaSize: {x: 0.5, y: 0.5}
   m_BounceIntensity: 1
-  m_ColorTemperature: 6115
+  m_ColorTemperature: 7255
   m_UseColorTemperature: 1
   m_BoundingSphereOverride: {x: 0, y: 0, z: 0, w: 0}
   m_UseBoundingSphereOverride: 0
@@ -8857,6 +8858,11 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 61169ea107d8d23459af81a8959ea77b, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::BoidController
+  settingsProfile: {fileID: 0}
+  applyProfileOnStart: 1
+  liveProfileSync: 1
+  saveProfileOnStop: 1
+  enableLegacyRuntimeUI: 1
   simulationArea: {fileID: 150923640}
   boidPrefab: {fileID: 1951385812654012274, guid: 6f393430a75872047b3e1a042898984d, type: 3}
   boidCount: 100
@@ -8865,6 +8871,7 @@ MonoBehaviour:
   maxSpawnAttempts: 50
   minSpeed: 1.5
   maxSpeed: 4
+  maxSpeedCap: 0
   maxSteerForce: 6
   neighborRadius: 2
   separationRadius: 0.6
@@ -8883,8 +8890,12 @@ MonoBehaviour:
   weightPredatorAvoid: 2
   predatorAvoidBoost: 2
   predatorPanicRadius: 1.2
+  predatorPanicSpeedMultiplier: 1.25
   verticalSteerDamping: 0.4
+  cellSizeMultiplier: 1
   drawDebug: 0
+  debugDrawGrid: 0
+  debugNeighborCounts: 0
   agents: []
 --- !u!4 &1604424822
 Transform:
