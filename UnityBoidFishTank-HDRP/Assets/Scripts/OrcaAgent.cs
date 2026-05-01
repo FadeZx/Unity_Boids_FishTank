@@ -2,6 +2,33 @@
 using TMPro;
 
 public enum OrcaRole { Leader, Flanker, Striker, Support }
+public enum OrcaDebugMode { Off, SelectedOrca, AllOrcas, PodPlan, ForcesOnly, TargetsOnly }
+
+public struct OrcaDecisionDebug
+{
+    public string state;
+    public BoidAgent target;
+    public Vector3 aimPoint;
+    public Vector3 interceptPoint;
+    public Vector3 roleGoal;
+    public Vector3 preyCentroid;
+    public Vector3 preyVelocity;
+    public Vector3 podSeparation;
+    public Vector3 podAlignment;
+    public Vector3 podCohesion;
+    public Vector3 roleForce;
+    public Vector3 avoidance;
+    public Vector3 boundaryAvoidance;
+    public Vector3 depthForce;
+    public Vector3 finalSteer;
+    public float distanceToTarget;
+    public float leadTime;
+    public int roleIndex;
+    public bool hasTarget;
+    public bool hasIntercept;
+    public bool hasRoleGoal;
+    public bool sharedTarget;
+}
 
 [RequireComponent(typeof(Transform))]
 public class OrcaAgent : MonoBehaviour
@@ -29,6 +56,8 @@ public class OrcaAgent : MonoBehaviour
 
     public Vector3 Position => transform.position;
     public Vector3 Velocity { get; set; }
+    public OrcaDecisionDebug LastDecision { get; set; }
+    public bool HasDecisionDebug { get; set; }
 
     [Header("Rotation")]
     public float turnResponsiveness = 6f;
@@ -97,10 +126,12 @@ public class OrcaAgent : MonoBehaviour
         if (CurrentTarget != null && (CurrentTarget.controller == null || CurrentTarget.gameObject == null))
             ClearTarget();
 
-        var steer = controller.ComputeSteering(this, dt, out var debugForces);
+        var steer = controller.ComputeSteering(this, dt, out _);
+        HasDecisionDebug = true;
 
         Velocity += steer * dt;
-        float speed = Mathf.Clamp(Velocity.magnitude, controller.minSpeed, controller.maxSpeed);
+        float maxAllowedSpeed = IsStrikeBoosting ? controller.maxSpeed * controller.strikeBoost : controller.maxSpeed;
+        float speed = Mathf.Clamp(Velocity.magnitude, controller.minSpeed, maxAllowedSpeed);
         if (speed > 0.0001f)
             Velocity = Velocity.normalized * speed;
 
@@ -160,9 +191,15 @@ public class OrcaAgent : MonoBehaviour
             roleLabel.text = role.ToString();
         }
 
+        if (controller.ShouldDrawDebug(this))
+        {
+            controller.DrawOrcaDebug(this);
+        }
+
     }
 
     public bool CanStrike() => strikeCooldownTimer <= 0f;
+    public bool IsStrikeBoosting => strikeBoostTimer > 0f;
     public void ResetStrikeCooldown() => strikeCooldownTimer = controller.strikeCooldown;
     bool IsEating() => eatTimer > 0f;
 

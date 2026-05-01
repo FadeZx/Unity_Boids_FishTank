@@ -323,7 +323,7 @@ Camera:
     height: 1
   near clip plane: 0.3
   far clip plane: 1000
-  field of view: 60.00173
+  field of view: 70.9
   orthographic: 0
   orthographic size: 5
   m_Depth: -1
@@ -350,7 +350,7 @@ Transform:
   m_GameObject: {fileID: 50660685}
   serializedVersion: 2
   m_LocalRotation: {x: -0.007912058, y: 0.96177053, z: 0.035009332, w: -0.2714945}
-  m_LocalPosition: {x: 0.004527547, y: -0.0005461485, z: 0.0073661804}
+  m_LocalPosition: {x: 838.4, y: 41.76, z: 721.36}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -1030,7 +1030,7 @@ MonoBehaviour:
     LookAtTarget: {fileID: 0}
     CustomLookAtTarget: 0
   Lens:
-    FieldOfView: 99.20001
+    FieldOfView: 99.40004
     OrthographicSize: 5
     NearClipPlane: 0.3
     FarClipPlane: 1000
@@ -2250,7 +2250,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 886251e9a18ece04ea8e61686c173e1b, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Unity.Cinemachine::Unity.Cinemachine.CinemachinePositionComposer
-  CameraDistance: 10
+  CameraDistance: 30
   DeadZoneDepth: 0
   Composition:
     ScreenPosition: {x: -0.01547715, y: 0.06386304}
@@ -2571,6 +2571,7 @@ MonoBehaviour:
   flankers: 3
   strikers: 2
   supports: 2
+  spawnOnStart: 0
   spawnRadius: 48.9
   spawnCenter: {fileID: 287447064}
   maxSpawnAttempts: 50
@@ -2606,8 +2607,20 @@ MonoBehaviour:
   wTargetDistance: 1
   wTargetIsolation: 1
   shareLeaderTarget: 1
+  leaderTargetHoldTime: 4
+  targetSwitchScoreMargin: 0.35
+  interceptMaxLeadTime: 0.85
+  interceptMaxLeadDistance: 4
+  strikerStageRadius: 3
   showRoleText: 0
   labelCamera: {fileID: 50660687}
+  drawDebug: 0
+  debugMode: 1
+  debugSelectedIndex: 0
+  showDebugInstructions: 1
+  showDebugText: 1
+  showDebugScreenLines: 1
+  debugVectorScale: 1.4
   cameraController: {fileID: 287447065}
   killCount: 0
 --- !u!4 &287447064
@@ -8866,6 +8879,7 @@ MonoBehaviour:
   simulationArea: {fileID: 150923640}
   boidPrefab: {fileID: 1951385812654012274, guid: 6f393430a75872047b3e1a042898984d, type: 3}
   boidCount: 100
+  spawnOnStart: 0
   spawnRadius: 45.21
   spawnCenter: {fileID: 1604424822}
   maxSpawnAttempts: 50

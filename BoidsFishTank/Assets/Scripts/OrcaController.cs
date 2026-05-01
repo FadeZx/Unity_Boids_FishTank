@@ -25,6 +25,8 @@ public class OrcaController : MonoBehaviour
     public int supports = 2;
 
     [Header("Spawning")]
+    [Tooltip("Spawn the orca pod automatically when play mode starts.")]
+    public bool spawnOnStart = true;
     [Tooltip("Distance from tank center for spawning ring (gizmo shows exact radius you set)")]
     public float spawnRadius = 8.0f;
     [Tooltip("Center point for spawning ring (if not set, uses tank center when tank area exists)")]
@@ -130,7 +132,11 @@ public class OrcaController : MonoBehaviour
         // Auto-find Cinemachine components if not assigned
         AutoFindCinemachine();
 
-        SpawnPod();
+        if (spawnOnStart)
+        {
+            SpawnPod();
+        }
+
         // Populate target group with spawned orcas
         SyncTargetGroup();
     }

@@ -20,6 +20,8 @@ public class BoidController : MonoBehaviour
     public int boidCount = 100;
 
     [Header("Spawning")]
+    [Tooltip("Spawn tuna automatically when play mode starts.")]
+    public bool spawnOnStart = true;
     [Tooltip("Distance from tank center for spawning ring (gizmo shows exact radius you set)")]
     public float spawnRadius = 5.0f;
     [Tooltip("Center point for spawning ring (if not set, uses tank center when tank area exists)")]
@@ -101,7 +103,14 @@ public class BoidController : MonoBehaviour
 
         // Try auto-load from file (if exists), then PlayerPrefs
         TryLoadFromFile();
-        if (agents.Count == 0) Spawn();
+        if (spawnOnStart && agents.Count == 0)
+        {
+            Spawn();
+        }
+        else
+        {
+            lastSpawnCount = boidCount;
+        }
     }
 
     void Update()
